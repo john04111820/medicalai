@@ -157,3 +157,59 @@ h1 {
 .login-btn:hover {
     background-color: #3c4ab0;
 }
+
+/* --- 錄音狀態樣式 --- */
+/* 錄音中的按鈕樣式 */
+.mic-button.recording {
+    background-color: #d9534f; /* 紅色背景 */
+    border-color: #d9534f;
+    animation: pulse 1.5s ease-in-out infinite; /* 脈衝動畫 */
+}
+
+.mic-button.recording i {
+    color: white; /* 白色圖示 */
+}
+
+/* 脈衝動畫效果 */
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(217, 83, 79, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 15px rgba(217, 83, 79, 0);
+    }
+}
+
+/* 錄音狀態提示 */
+.recording-status,
+.processing-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    font-size: 1rem;
+    color: #333;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+.recording-status i {
+    color: #d9534f;
+    animation: blink 1s ease-in-out infinite; /* 閃爍動畫 */
+}
+
+.processing-status i {
+    color: #5563DE;
+}
+
+/* 閃爍動畫 */
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}

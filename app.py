@@ -1,8 +1,17 @@
-from flask import Flask, render_template_string, request, redirect, url_for, session, render_template
+from flask import Flask, render_template_string, request, redirect, url_for, session, render_template, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
+import whisper
+import os
+import tempfile
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
+
+# 初始化 Whisper 模型（使用 base 模型，平衡速度和準確度）
+# 首次運行時會自動下載模型
+print("正在載入 Whisper 模型...")
+whisper_model = whisper.load_model("base")
+print("Whisper 模型載入完成！")
 
 # 模擬使用者資料庫
 users = {"admin": generate_password_hash("1234")}
@@ -93,6 +102,48 @@ def register():
 def logout():
     session.pop("user", None) # 清除 session
     return redirect(url_for("index")) # 登出後留在首頁 (變成未登入狀態)
+
+# 5. Whisper 語音轉文字 API
+@app.route("/api/transcribe", methods=["POST"])
+def transcribe_audio():
+    try:
+        # 檢查是否有上傳的文件
+        if "audio" not in request.files:
+            return jsonify({"error": "沒有上傳音頻文件"}), 400
+        
+        audio_file = request.files["audio"]
+        
+        if audio_file.filename == "":
+            return jsonify({"error": "文件為空"}), 400
+        
+        # 將上傳的音頻保存到臨時文件
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp_file:
+            audio_file.save(tmp_file.name)
+            temp_path = tmp_file.name
+        
+        try:
+            # 使用 Whisper 轉錄音頻
+            # Whisper 會自動使用 ffmpeg 處理各種音頻格式（包括 webm）
+            # language="zh" 指定中文，提高中文識別準確度
+            result = whisper_model.transcribe(
+                temp_path, 
+                language="zh",  # 指定中文
+                task="transcribe",  # 轉錄任務
+                fp16=False  # 如果沒有 GPU，使用 fp32
+            )
+            transcribed_text = result["text"].strip()
+            
+            return jsonify({
+                "success": True,
+                "text": transcribed_text
+            })
+        finally:
+            # 清理臨時文件
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    
+    except Exception as e:
+        return jsonify({"error": f"處理音頻時發生錯誤: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
