@@ -125,6 +125,7 @@ def transcribe_audio():
             # 使用 Whisper 轉錄音頻
             # Whisper 會自動使用 ffmpeg 處理各種音頻格式（包括 webm）
             # language="zh" 指定中文，提高中文識別準確度
+            print(f"開始轉錄音頻文件: {temp_path}")
             result = whisper_model.transcribe(
                 temp_path, 
                 language="zh",  # 指定中文
@@ -132,6 +133,13 @@ def transcribe_audio():
                 fp16=False  # 如果沒有 GPU，使用 fp32
             )
             transcribed_text = result["text"].strip()
+            print(f"轉錄結果: {transcribed_text}")
+            
+            if not transcribed_text:
+                return jsonify({
+                    "success": False,
+                    "error": "未能識別到語音內容，請確保錄音清晰且包含語音"
+                }), 200
             
             return jsonify({
                 "success": True,
@@ -143,7 +151,14 @@ def transcribe_audio():
                 os.remove(temp_path)
     
     except Exception as e:
-        return jsonify({"error": f"處理音頻時發生錯誤: {str(e)}"}), 500
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"處理音頻時發生錯誤: {str(e)}")
+        print(f"錯誤詳情: {error_trace}")
+        return jsonify({
+            "success": False,
+            "error": f"處理音頻時發生錯誤: {str(e)}"
+        }), 500
 
 if __name__ == "__main__":
     app.run(debug=True)

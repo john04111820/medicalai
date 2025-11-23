@@ -108,6 +108,8 @@
 
         async function sendAudioToServer(audioBlob) {
             try {
+                console.log('開始發送音頻，大小:', audioBlob.size, 'bytes');
+                
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'recording.webm');
                 
@@ -116,26 +118,47 @@
                     body: formData
                 });
                 
-                const data = await response.json();
+                console.log('收到響應，狀態:', response.status);
                 
-                if (data.success) {
+                // 檢查響應狀態
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('服務器錯誤:', errorText);
+                    throw new Error(`服務器錯誤: ${response.status} - ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('收到數據:', data);
+                
+                if (data.success && data.text) {
                     // 將轉錄的文字顯示在輸入面板中
                     const currentText = textInput.value.trim();
-                    const newText = data.text;
+                    const newText = data.text.trim();
                     
-                    if (currentText) {
-                        // 如果已有文字，在後面添加新文字
-                        textInput.value = currentText + ' ' + newText;
+                    console.log('當前文字:', currentText);
+                    console.log('新文字:', newText);
+                    
+                    if (newText) {
+                        if (currentText) {
+                            // 如果已有文字，在後面添加新文字
+                            textInput.value = currentText + ' ' + newText;
+                        } else {
+                            // 如果沒有文字，直接顯示新文字
+                            textInput.value = newText;
+                        }
+                        console.log('文字已更新到輸入框');
                     } else {
-                        // 如果沒有文字，直接顯示新文字
-                        textInput.value = newText;
+                        console.warn('轉錄結果為空');
+                        alert('未能識別到語音內容，請重試');
                     }
                 } else {
-                    alert('轉錄失敗: ' + (data.error || '未知錯誤'));
+                    const errorMsg = data.error || '未知錯誤';
+                    console.error('轉錄失敗:', errorMsg);
+                    alert('轉錄失敗: ' + errorMsg);
                 }
             } catch (error) {
                 console.error('發送音頻時發生錯誤:', error);
-                alert('發送音頻時發生錯誤，請重試');
+                alert('發送音頻時發生錯誤: ' + error.message + '\n請查看瀏覽器控制台獲取詳細信息');
             } finally {
                 processingStatus.style.display = 'none';
             }
