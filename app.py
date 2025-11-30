@@ -18,8 +18,20 @@ if not gemini_api_key:
 
 if gemini_api_key:
     genai.configure(api_key=gemini_api_key)
-    gemini_model = genai.GenerativeModel('gemini-pro')
-    print("Google Gemini API 客戶端已初始化")
+    # 使用新的模型名稱：gemini-1.5-flash (快速且免費) 或 gemini-1.5-pro (更強大)
+    try:
+        gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+        print("Google Gemini API 客戶端已初始化 (使用 gemini-1.5-flash)")
+    except Exception as e:
+        print(f"嘗試使用 gemini-1.5-flash 失敗: {e}")
+        try:
+            # 備用：嘗試使用 gemini-1.5-pro
+            gemini_model = genai.GenerativeModel('gemini-1.5-pro')
+            print("Google Gemini API 客戶端已初始化 (使用 gemini-1.5-pro)")
+        except Exception as e2:
+            print(f"嘗試使用 gemini-1.5-pro 也失敗: {e2}")
+            gemini_model = None
+            print("警告: 無法初始化 Gemini 模型")
 else:
     gemini_model = None
     print("警告: 未設置 GEMINI_API_KEY 環境變數，Gemini 功能將無法使用")
@@ -245,13 +257,18 @@ def chat():
         
         # 調用 Gemini API
         print(f"發送消息到 Gemini: {user_message}")
-        response = gemini_model.generate_content(
-            full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.7,
-                max_output_tokens=1000,
+        try:
+            response = gemini_model.generate_content(
+                full_prompt,
+                generation_config={
+                    "temperature": 0.7,
+                    "max_output_tokens": 1000,
+                }
             )
-        )
+        except Exception as api_error:
+            print(f"Gemini API 調用錯誤: {api_error}")
+            # 嘗試使用更簡單的方式
+            response = gemini_model.generate_content(full_prompt)
         
         ai_response = response.text.strip()
         print(f"Gemini 回應: {ai_response}")
