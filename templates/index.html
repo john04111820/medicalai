@@ -29,26 +29,52 @@
 
     <!-- === 主要內容 === -->
     <main class="main-container">
-        <h1>請講出或輸入您的需求</h1>
-        <textarea class="text-input" id="textInput" placeholder="請輸入文字或點擊麥克風錄音"></textarea>
-        <button class="mic-button" id="micButton">
-            <i class="fa-solid fa-microphone"></i>
-        </button>
-        <div class="recording-status" id="recordingStatus" style="display: none;">
-            <i class="fa-solid fa-circle"></i>
-            <span>正在錄音中...</span>
+        <h1>醫療AI聊天助手</h1>
+        
+        <!-- 聊天消息顯示區域 -->
+        <div class="chat-container" id="chatContainer">
+            <div class="welcome-message">
+                <i class="fa-solid fa-robot"></i>
+                <p>您好！我是醫療AI助手，可以幫助您解答醫療相關問題。您可以輸入文字或使用語音輸入。</p>
+            </div>
         </div>
-        <div class="processing-status" id="processingStatus" style="display: none;">
-            <i class="fa-solid fa-spinner fa-spin"></i>
-            <span>正在處理音頻...</span>
+        
+        <!-- 輸入區域 -->
+        <div class="input-container">
+            <div class="input-wrapper">
+                <textarea class="text-input" id="textInput" placeholder="請輸入您的問題或點擊麥克風錄音..." rows="2"></textarea>
+                <div class="input-buttons">
+                    <button class="mic-button" id="micButton" title="語音輸入">
+                        <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <button class="send-button" id="sendButton" title="發送">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                    <button class="clear-button" id="clearButton" title="清除對話">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="recording-status" id="recordingStatus" style="display: none;">
+                <i class="fa-solid fa-circle"></i>
+                <span>正在錄音中...</span>
+            </div>
+            <div class="processing-status" id="processingStatus" style="display: none;">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <span id="processingText">正在處理...</span>
+            </div>
         </div>
     </main>
 
     <script>
         const micButton = document.getElementById('micButton');
         const textInput = document.getElementById('textInput');
+        const sendButton = document.getElementById('sendButton');
+        const clearButton = document.getElementById('clearButton');
+        const chatContainer = document.getElementById('chatContainer');
         const recordingStatus = document.getElementById('recordingStatus');
         const processingStatus = document.getElementById('processingStatus');
+        const processingText = document.getElementById('processingText');
         
         let mediaRecorder = null;
         let audioChunks = [];
@@ -58,6 +84,40 @@
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             alert('您的瀏覽器不支持錄音功能，請使用 Chrome、Edge 或 Firefox 瀏覽器');
         }
+
+        // 發送消息按鈕事件
+        sendButton.addEventListener('click', sendMessage);
+        
+        // 按 Enter 發送（Shift+Enter 換行）
+        textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 清除對話歷史
+        clearButton.addEventListener('click', async () => {
+            if (confirm('確定要清除所有對話記錄嗎？')) {
+                try {
+                    const response = await fetch('/api/clear-history', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        chatContainer.innerHTML = `
+                            <div class="welcome-message">
+                                <i class="fa-solid fa-robot"></i>
+                                <p>您好！我是醫療AI助手，可以幫助您解答醫療相關問題。您可以輸入文字或使用語音輸入。</p>
+                            </div>
+                        `;
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+                } catch (error) {
+                    console.error('清除對話歷史失敗:', error);
+                }
+            }
+        });
 
         micButton.addEventListener('click', async () => {
             if (!isRecording) {
@@ -131,22 +191,14 @@
                 console.log('收到數據:', data);
                 
                 if (data.success && data.text) {
-                    // 將轉錄的文字顯示在輸入面板中
-                    const currentText = textInput.value.trim();
                     const newText = data.text.trim();
                     
-                    console.log('當前文字:', currentText);
-                    console.log('新文字:', newText);
-                    
                     if (newText) {
-                        if (currentText) {
-                            // 如果已有文字，在後面添加新文字
-                            textInput.value = currentText + ' ' + newText;
-                        } else {
-                            // 如果沒有文字，直接顯示新文字
-                            textInput.value = newText;
-                        }
-                        console.log('文字已更新到輸入框');
+                        // 將轉錄的文字顯示在輸入框中
+                        textInput.value = newText;
+                        console.log('語音轉文字成功，文字已填入輸入框');
+                        // 自動發送消息到 ChatGPT
+                        await sendMessage();
                     } else {
                         console.warn('轉錄結果為空');
                         alert('未能識別到語音內容，請重試');
@@ -162,6 +214,119 @@
             } finally {
                 processingStatus.style.display = 'none';
             }
+        }
+
+        // 發送消息到 ChatGPT
+        async function sendMessage() {
+            const message = textInput.value.trim();
+            
+            if (!message) {
+                return;
+            }
+            
+            // 顯示用戶消息
+            addMessageToChat('user', message);
+            
+            // 清空輸入框
+            textInput.value = '';
+            
+            // 顯示 AI 正在輸入
+            const aiMessageElement = addMessageToChat('assistant', '正在思考...', true);
+            
+            // 禁用輸入
+            textInput.disabled = true;
+            sendButton.disabled = true;
+            micButton.disabled = true;
+            processingText.textContent = 'AI 正在回應...';
+            processingStatus.style.display = 'flex';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                const data = await response.json();
+                
+                // 移除「正在思考...」消息
+                aiMessageElement.remove();
+                
+                if (data.success && data.message) {
+                    // 顯示 AI 回應
+                    addMessageToChat('assistant', data.message);
+                } else {
+                    const errorMsg = data.error || '未知錯誤';
+                    addMessageToChat('assistant', '抱歉，發生錯誤：' + errorMsg);
+                    console.error('ChatGPT API 錯誤:', errorMsg);
+                }
+            } catch (error) {
+                // 移除「正在思考...」消息
+                aiMessageElement.remove();
+                addMessageToChat('assistant', '抱歉，發送消息時發生錯誤，請重試。');
+                console.error('發送消息錯誤:', error);
+            } finally {
+                // 恢復輸入
+                textInput.disabled = false;
+                sendButton.disabled = false;
+                micButton.disabled = false;
+                processingStatus.style.display = 'none';
+                textInput.focus();
+            }
+        }
+
+        // 添加消息到聊天界面
+        function addMessageToChat(role, content, isTyping = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            
+            if (role === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="message-content">
+                        <div class="message-text">${escapeHtml(content)}</div>
+                        <div class="message-time">${getCurrentTime()}</div>
+                    </div>
+                    <div class="message-avatar">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                `;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="message-avatar">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-text">${isTyping ? '<span class="typing-indicator">正在輸入...</span>' : escapeHtml(content)}</div>
+                        <div class="message-time">${getCurrentTime()}</div>
+                    </div>
+                `;
+            }
+            
+            // 移除歡迎消息（如果存在）
+            const welcomeMsg = chatContainer.querySelector('.welcome-message');
+            if (welcomeMsg) {
+                welcomeMsg.remove();
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            return messageDiv;
+        }
+
+        // HTML 轉義函數
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 獲取當前時間
+        function getCurrentTime() {
+            const now = new Date();
+            return now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
         }
     </script>
 

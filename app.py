@@ -3,9 +3,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import whisper
 import os
 import tempfile
+from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
+
+# 初始化 OpenAI 客戶端
+# 從環境變數讀取 API Key，如果沒有設置則使用空字串（需要用戶在環境中設置）
+openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+if openai_api_key:
+    openai_client = OpenAI(api_key=openai_api_key)
+    print("OpenAI API 客戶端已初始化")
+else:
+    openai_client = None
+    print("警告: 未設置 OPENAI_API_KEY 環境變數，ChatGPT 功能將無法使用")
 
 # 初始化 Whisper 模型（使用 base 模型，平衡速度和準確度）
 # 首次運行時會自動下載模型
@@ -15,6 +26,22 @@ print("Whisper 模型載入完成！")
 
 # 模擬使用者資料庫
 users = {"admin": generate_password_hash("1234")}
+
+# 對話歷史管理（使用 session 存儲）
+def get_conversation_history():
+    """獲取當前用戶的對話歷史"""
+    if "conversation" not in session:
+        session["conversation"] = []
+    return session["conversation"]
+
+def add_to_conversation(role, content):
+    """添加消息到對話歷史"""
+    conversation = get_conversation_history()
+    conversation.append({"role": role, "content": content})
+    # 限制對話歷史長度（保留最近 20 條消息）
+    if len(conversation) > 20:
+        conversation = conversation[-20:]
+    session["conversation"] = conversation
 
 # --- HTML 模板 (微調了連結路徑) ---
 
@@ -159,6 +186,75 @@ def transcribe_audio():
             "success": False,
             "error": f"處理音頻時發生錯誤: {str(e)}"
         }), 500
+
+# 6. ChatGPT 聊天 API
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    try:
+        if not openai_client:
+            return jsonify({
+                "success": False,
+                "error": "OpenAI API 未配置，請設置 OPENAI_API_KEY 環境變數"
+            }), 500
+        
+        data = request.get_json()
+        user_message = data.get("message", "").strip()
+        
+        if not user_message:
+            return jsonify({
+                "success": False,
+                "error": "消息內容不能為空"
+            }), 400
+        
+        # 獲取對話歷史
+        conversation = get_conversation_history()
+        
+        # 添加用戶消息到歷史
+        add_to_conversation("user", user_message)
+        
+        # 構建消息列表（包含系統提示和對話歷史）
+        messages = [
+            {
+                "role": "system",
+                "content": "你是一個友善且專業的醫療AI助手，專門幫助用戶解答醫療相關問題。請用繁體中文回答，回答要準確、易懂且具有同理心。"
+            }
+        ] + conversation
+        
+        # 調用 ChatGPT API
+        print(f"發送消息到 ChatGPT: {user_message}")
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",  # 或使用 "gpt-4" 獲得更佳效果
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        ai_response = response.choices[0].message.content.strip()
+        print(f"ChatGPT 回應: {ai_response}")
+        
+        # 添加 AI 回應到歷史
+        add_to_conversation("assistant", ai_response)
+        
+        return jsonify({
+            "success": True,
+            "message": ai_response
+        })
+    
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"ChatGPT API 調用錯誤: {str(e)}")
+        print(f"錯誤詳情: {error_trace}")
+        return jsonify({
+            "success": False,
+            "error": f"ChatGPT API 調用失敗: {str(e)}"
+        }), 500
+
+# 7. 清除對話歷史
+@app.route("/api/clear-history", methods=["POST"])
+def clear_history():
+    session["conversation"] = []
+    return jsonify({"success": True, "message": "對話歷史已清除"})
 
 if __name__ == "__main__":
     app.run(debug=True)
