@@ -19,11 +19,23 @@ else:
     gemini_model = None
     print("警告: 未設置 GEMINI_API_KEY 環境變數，Gemini 功能將無法使用")
 
-# 初始化 Whisper 模型（使用 base 模型，平衡速度和準確度）
-# 首次運行時會自動下載模型
-print("正在載入 Whisper 模型...")
-whisper_model = whisper.load_model("base")
-print("Whisper 模型載入完成！")
+# Whisper 模型延遲載入（避免啟動超時和錯誤）
+whisper_model = None
+
+def get_whisper_model():
+    """延遲載入 Whisper 模型，只在第一次使用時載入"""
+    global whisper_model
+    if whisper_model is None:
+        try:
+            print("正在載入 Whisper 模型...")
+            # 使用 base 模型，平衡速度和準確度
+            whisper_model = whisper.load_model("base")
+            print("Whisper 模型載入完成！")
+        except Exception as e:
+            print(f"載入 Whisper 模型失敗: {str(e)}")
+            print("請確認已安裝 openai-whisper 和相關依賴")
+            raise
+    return whisper_model
 
 # 模擬使用者資料庫
 users = {"admin": generate_password_hash("1234")}
@@ -150,11 +162,14 @@ def transcribe_audio():
             temp_path = tmp_file.name
         
         try:
+            # 獲取 Whisper 模型（延遲載入）
+            model = get_whisper_model()
+            
             # 使用 Whisper 轉錄音頻
             # Whisper 會自動使用 ffmpeg 處理各種音頻格式（包括 webm）
             # language="zh" 指定中文，提高中文識別準確度
             print(f"開始轉錄音頻文件: {temp_path}")
-            result = whisper_model.transcribe(
+            result = model.transcribe(
                 temp_path, 
                 language="zh",  # 指定中文
                 task="transcribe",  # 轉錄任務
