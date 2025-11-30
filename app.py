@@ -9,8 +9,13 @@ app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
 # 初始化 Google Gemini API 客戶端
-# 從環境變數讀取 API Key，Gemini 提供免費額度
+# 優先從環境變數讀取 API Key，如果沒有則使用備用 Key
 gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+if not gemini_api_key:
+    # 備用 API Key（如果環境變數未設置）
+    gemini_api_key = "AIzaSyCdAVkH-L8WUQ_ArVREzfRC4LwzYvDIj80"
+    print("使用備用 Gemini API Key")
+
 if gemini_api_key:
     genai.configure(api_key=gemini_api_key)
     gemini_model = genai.GenerativeModel('gemini-pro')
