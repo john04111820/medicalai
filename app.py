@@ -3,20 +3,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import whisper
 import os
 import tempfile
-from openai import OpenAI
+import google.generativeai as genai
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
-# 初始化 OpenAI 客戶端
-# 從環境變數讀取 API Key，如果沒有設置則使用空字串（需要用戶在環境中設置）
-openai_api_key = os.environ.get("OPENAI_API_KEY", "")
-if openai_api_key:
-    openai_client = OpenAI(api_key=openai_api_key)
-    print("OpenAI API 客戶端已初始化")
+# 初始化 Google Gemini API 客戶端
+# 從環境變數讀取 API Key，Gemini 提供免費額度
+gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+if gemini_api_key:
+    genai.configure(api_key=gemini_api_key)
+    gemini_model = genai.GenerativeModel('gemini-pro')
+    print("Google Gemini API 客戶端已初始化")
 else:
-    openai_client = None
-    print("警告: 未設置 OPENAI_API_KEY 環境變數，ChatGPT 功能將無法使用")
+    gemini_model = None
+    print("警告: 未設置 GEMINI_API_KEY 環境變數，Gemini 功能將無法使用")
 
 # 初始化 Whisper 模型（使用 base 模型，平衡速度和準確度）
 # 首次運行時會自動下載模型
@@ -187,14 +188,14 @@ def transcribe_audio():
             "error": f"處理音頻時發生錯誤: {str(e)}"
         }), 500
 
-# 6. ChatGPT 聊天 API
+# 6. Gemini 聊天 API
 @app.route("/api/chat", methods=["POST"])
 def chat():
     try:
-        if not openai_client:
+        if not gemini_model:
             return jsonify({
                 "success": False,
-                "error": "OpenAI API 未配置，請設置 OPENAI_API_KEY 環境變數"
+                "error": "Gemini API 未配置，請設置 GEMINI_API_KEY 環境變數"
             }), 500
         
         data = request.get_json()
@@ -209,30 +210,34 @@ def chat():
         # 獲取對話歷史
         conversation = get_conversation_history()
         
-        # 添加用戶消息到歷史
-        add_to_conversation("user", user_message)
+        # 構建提示詞（包含系統提示和對話歷史）
+        system_prompt = "你是一個友善且專業的醫療AI助手，專門幫助用戶解答醫療相關問題。請用繁體中文回答，回答要準確、易懂且具有同理心。\n\n"
         
-        # 構建消息列表（包含系統提示和對話歷史）
-        messages = [
-            {
-                "role": "system",
-                "content": "你是一個友善且專業的醫療AI助手，專門幫助用戶解答醫療相關問題。請用繁體中文回答，回答要準確、易懂且具有同理心。"
-            }
-        ] + conversation
+        # 將對話歷史轉換為 Gemini 格式
+        chat_history = ""
+        for msg in conversation[-10:]:  # 只使用最近 10 條消息
+            if msg["role"] == "user":
+                chat_history += f"用戶: {msg['content']}\n"
+            else:
+                chat_history += f"助手: {msg['content']}\n"
         
-        # 調用 ChatGPT API
-        print(f"發送消息到 ChatGPT: {user_message}")
-        response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",  # 或使用 "gpt-4" 獲得更佳效果
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1000
+        full_prompt = system_prompt + chat_history + f"用戶: {user_message}\n助手:"
+        
+        # 調用 Gemini API
+        print(f"發送消息到 Gemini: {user_message}")
+        response = gemini_model.generate_content(
+            full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=1000,
+            )
         )
         
-        ai_response = response.choices[0].message.content.strip()
-        print(f"ChatGPT 回應: {ai_response}")
+        ai_response = response.text.strip()
+        print(f"Gemini 回應: {ai_response}")
         
-        # 添加 AI 回應到歷史
+        # 添加用戶消息和 AI 回應到歷史
+        add_to_conversation("user", user_message)
         add_to_conversation("assistant", ai_response)
         
         return jsonify({
@@ -243,11 +248,11 @@ def chat():
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        print(f"ChatGPT API 調用錯誤: {str(e)}")
+        print(f"Gemini API 調用錯誤: {str(e)}")
         print(f"錯誤詳情: {error_trace}")
         return jsonify({
             "success": False,
-            "error": f"ChatGPT API 調用失敗: {str(e)}"
+            "error": f"Gemini API 調用失敗: {str(e)}"
         }), 500
 
 # 7. 清除對話歷史

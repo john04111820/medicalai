@@ -197,7 +197,7 @@
                         // 將轉錄的文字顯示在輸入框中
                         textInput.value = newText;
                         console.log('語音轉文字成功，文字已填入輸入框');
-                        // 自動發送消息到 ChatGPT
+                        // 自動發送消息到 Gemini
                         await sendMessage();
                     } else {
                         console.warn('轉錄結果為空');
@@ -216,7 +216,7 @@
             }
         }
 
-        // 發送消息到 ChatGPT
+        // 發送消息到 Gemini
         async function sendMessage() {
             const message = textInput.value.trim();
             
@@ -260,7 +260,7 @@
                 } else {
                     const errorMsg = data.error || '未知錯誤';
                     addMessageToChat('assistant', '抱歉，發生錯誤：' + errorMsg);
-                    console.error('ChatGPT API 錯誤:', errorMsg);
+                    console.error('Gemini API 錯誤:', errorMsg);
                 }
             } catch (error) {
                 // 移除「正在思考...」消息
