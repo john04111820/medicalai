@@ -16,24 +16,57 @@ if not gemini_api_key:
     gemini_api_key = "AIzaSyCdAVkH-L8WUQ_ArVREzfRC4LwzYvDIj80"
     print("使用備用 Gemini API Key")
 
+gemini_model = None
+
 if gemini_api_key:
-    genai.configure(api_key=gemini_api_key)
-    # 使用新的模型名稱：gemini-1.5-flash (快速且免費) 或 gemini-1.5-pro (更強大)
     try:
-        gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-        print("Google Gemini API 客戶端已初始化 (使用 gemini-1.5-flash)")
-    except Exception as e:
-        print(f"嘗試使用 gemini-1.5-flash 失敗: {e}")
+        print(f"正在配置 Gemini API (Key 前綴: {gemini_api_key[:10]}...)")
+        genai.configure(api_key=gemini_api_key)
+        
+        # 嘗試列出可用模型（用於診斷）
         try:
-            # 備用：嘗試使用 gemini-1.5-pro
-            gemini_model = genai.GenerativeModel('gemini-1.5-pro')
-            print("Google Gemini API 客戶端已初始化 (使用 gemini-1.5-pro)")
-        except Exception as e2:
-            print(f"嘗試使用 gemini-1.5-pro 也失敗: {e2}")
-            gemini_model = None
-            print("警告: 無法初始化 Gemini 模型")
+            print("正在檢查可用的 Gemini 模型...")
+            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            print(f"可用的模型: {available_models}")
+        except Exception as list_error:
+            print(f"無法列出模型（這可能是正常的）: {list_error}")
+        
+        # 嘗試不同的模型名稱
+        model_names = [
+            'gemini-1.5-flash',
+            'gemini-1.5-pro',
+            'gemini-pro',
+            'gemini-1.0-pro',
+            'models/gemini-1.5-flash',
+            'models/gemini-1.5-pro'
+        ]
+        
+        for model_name in model_names:
+            try:
+                print(f"嘗試初始化模型: {model_name}")
+                gemini_model = genai.GenerativeModel(model_name)
+                # 測試模型是否可用
+                test_response = gemini_model.generate_content("測試")
+                print(f"✓ Google Gemini API 客戶端已成功初始化 (使用 {model_name})")
+                break
+            except Exception as model_error:
+                print(f"✗ 模型 {model_name} 失敗: {str(model_error)[:100]}")
+                gemini_model = None
+                continue
+        
+        if gemini_model is None:
+            print("❌ 警告: 所有模型初始化都失敗，Gemini 功能將無法使用")
+            print("請檢查:")
+            print("1. API Key 是否正確且有效")
+            print("2. 網絡連接是否正常")
+            print("3. API Key 是否有足夠的權限")
+            
+    except Exception as e:
+        import traceback
+        print(f"❌ Gemini API 配置失敗: {str(e)}")
+        print(f"詳細錯誤: {traceback.format_exc()}")
+        gemini_model = None
 else:
-    gemini_model = None
     print("警告: 未設置 GEMINI_API_KEY 環境變數，Gemini 功能將無法使用")
 
 # Whisper 模型延遲載入（避免啟動超時和錯誤）
