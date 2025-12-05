@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>預約門診 - 醫資醫院</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .appointment-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .appointment-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .appointment-header h1 {
+            color: #5563DE;
+            margin-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        .form-group label .required {
+            color: red;
+            margin-left: 3px;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            font-family: Arial, sans-serif;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        .btn {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #5563DE;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #4452CC;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- === 右上角導覽列 === -->
+    <div class="top-right-nav">
+        {% if username %}
+            <span class="user-welcome">嗨，{{ username }}</span>
+            <a href="/appointment/list" class="nav-btn" style="background: #28a745; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px;">
+                <i class="fa-solid fa-calendar-check"></i> 我的預約
+            </a>
+            <a href="/logout" class="nav-btn logout-btn">登出</a>
+        {% else %}
+            <a href="/login" class="nav-btn login-btn">登入</a>
+        {% endif %}
+    </div>
+
+    <!-- === 左上角 Logo === -->
+    <header class="logo-container">
+        <i class="fa-solid fa-hospital"></i>
+        <span>醫資醫院</span>
+    </header>
+
+    <!-- === 主要內容 === -->
+    <main class="main-container">
+        <div class="appointment-container">
+            <div class="appointment-header">
+                <h1><i class="fa-solid fa-calendar-plus"></i> 預約門診</h1>
+                <p>請填寫以下資訊完成預約</p>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-error">
+                <i class="fa-solid fa-exclamation-circle"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" action="/appointment">
+                <div class="form-group">
+                    <label>病患姓名 <span class="required">*</span></label>
+                    <input type="text" name="patient_name" 
+                           value="{{ form_data.patient_name if form_data else '' }}"
+                           required placeholder="請輸入病患姓名">
+                </div>
+
+                <div class="form-group">
+                    <label>聯絡電話 <span class="required">*</span></label>
+                    <input type="tel" name="patient_phone" 
+                           value="{{ form_data.patient_phone if form_data else '' }}"
+                           required placeholder="請輸入聯絡電話">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>科別 <span class="required">*</span></label>
+                        <select name="department" required>
+                            <option value="">請選擇科別</option>
+                            <option value="內科" {% if form_data and form_data.department == '內科' %}selected{% endif %}>內科</option>
+                            <option value="外科" {% if form_data and form_data.department == '外科' %}selected{% endif %}>外科</option>
+                            <option value="兒科" {% if form_data and form_data.department == '兒科' %}selected{% endif %}>兒科</option>
+                            <option value="婦產科" {% if form_data and form_data.department == '婦產科' %}selected{% endif %}>婦產科</option>
+                            <option value="骨科" {% if form_data and form_data.department == '骨科' %}selected{% endif %}>骨科</option>
+                            <option value="眼科" {% if form_data and form_data.department == '眼科' %}selected{% endif %}>眼科</option>
+                            <option value="耳鼻喉科" {% if form_data and form_data.department == '耳鼻喉科' %}selected{% endif %}>耳鼻喉科</option>
+                            <option value="皮膚科" {% if form_data and form_data.department == '皮膚科' %}selected{% endif %}>皮膚科</option>
+                            <option value="精神科" {% if form_data and form_data.department == '精神科' %}selected{% endif %}>精神科</option>
+                            <option value="復健科" {% if form_data and form_data.department == '復健科' %}selected{% endif %}>復健科</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>醫師姓名 <span class="required">*</span></label>
+                        <input type="text" name="doctor_name" 
+                               value="{{ form_data.doctor_name if form_data else '' }}"
+                               required placeholder="請輸入醫師姓名">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>預約日期 <span class="required">*</span></label>
+                        <input type="date" name="appointment_date" 
+                               value="{{ form_data.appointment_date if form_data else '' }}"
+                               required min="{{ min_date }}">
+                    </div>
+
+                    <div class="form-group">
+                        <label>預約時間 <span class="required">*</span></label>
+                        <input type="time" name="appointment_time" 
+                               value="{{ form_data.appointment_time if form_data else '' }}"
+                               required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>症狀描述（選填）</label>
+                    <textarea name="symptoms" placeholder="請簡述您的症狀或需求...">{{ form_data.symptoms if form_data else '' }}</textarea>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-check"></i> 提交預約
+                    </button>
+                    <a href="/" class="btn btn-secondary" style="text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-home"></i> 返回首頁
+                    </a>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        // 設置最小日期為明天
+        const dateInput = document.querySelector('input[name="appointment_date"]');
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        dateInput.min = tomorrow.toISOString().split('T')[0];
+    </script>
+</body>
+</html>
+

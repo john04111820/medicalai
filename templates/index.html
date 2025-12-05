@@ -12,8 +12,14 @@
     <!-- === 右上角導覽列 === -->
     <div class="top-right-nav">
         {% if username %}
-            <!-- 有登入：顯示名字 + 登出按鈕 -->
+            <!-- 有登入：顯示名字 + 預約連結 + 登出按鈕 -->
             <span class="user-welcome">嗨，{{ username }}</span>
+            <a href="/appointment" class="nav-btn" style="background: #28a745; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px;">
+                <i class="fa-solid fa-calendar-plus"></i> 預約門診
+            </a>
+            <a href="/appointment/list" class="nav-btn" style="background: #17a2b8; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px;">
+                <i class="fa-solid fa-calendar-check"></i> 我的預約
+            </a>
             <a href="/logout" class="nav-btn logout-btn">登出</a>
         {% else %}
             <!-- 沒登入：顯示登入按鈕，連結指向 /login -->

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的預約記錄 - 醫資醫院</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .appointment-list-container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .list-header h1 {
+            color: #5563DE;
+            margin: 0;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #5563DE;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #4452CC;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            padding: 5px 15px;
+            font-size: 14px;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .appointment-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .appointment-table th,
+        .appointment-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .appointment-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+        .appointment-table tr:hover {
+            background: #f8f9fa;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-confirmed {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-cancelled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            color: #dee2e6;
+        }
+        @media (max-width: 768px) {
+            .appointment-table {
+                font-size: 14px;
+            }
+            .appointment-table th,
+            .appointment-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- === 右上角導覽列 === -->
+    <div class="top-right-nav">
+        {% if username %}
+            <span class="user-welcome">嗨，{{ username }}</span>
+            <a href="/appointment" class="nav-btn" style="background: #28a745; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px;">
+                <i class="fa-solid fa-calendar-plus"></i> 新增預約
+            </a>
+            <a href="/logout" class="nav-btn logout-btn">登出</a>
+        {% else %}
+            <a href="/login" class="nav-btn login-btn">登入</a>
+        {% endif %}
+    </div>
+
+    <!-- === 左上角 Logo === -->
+    <header class="logo-container">
+        <i class="fa-solid fa-hospital"></i>
+        <span>醫資醫院</span>
+    </header>
+
+    <!-- === 主要內容 === -->
+    <main class="main-container">
+        <div class="appointment-list-container">
+            <div class="list-header">
+                <h1><i class="fa-solid fa-calendar-check"></i> 我的預約記錄</h1>
+                <a href="/appointment" class="btn btn-primary">
+                    <i class="fa-solid fa-plus"></i> 新增預約
+                </a>
+            </div>
+
+            {% if success %}
+            <div class="alert alert-success">
+                <i class="fa-solid fa-check-circle"></i> {{ success }}
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="alert alert-error">
+                <i class="fa-solid fa-exclamation-circle"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            {% if appointments and appointments|length > 0 %}
+            <table class="appointment-table">
+                <thead>
+                    <tr>
+                        <th>預約日期</th>
+                        <th>預約時間</th>
+                        <th>病患姓名</th>
+                        <th>聯絡電話</th>
+                        <th>科別</th>
+                        <th>醫師</th>
+                        <th>狀態</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for apt in appointments %}
+                    <tr>
+                        <td>{{ apt.appointment_date }}</td>
+                        <td>{{ apt.appointment_time }}</td>
+                        <td>{{ apt.patient_name }}</td>
+                        <td>{{ apt.patient_phone }}</td>
+                        <td>{{ apt.department }}</td>
+                        <td>{{ apt.doctor_name }}</td>
+                        <td>
+                            {% if apt.status == 'pending' %}
+                                <span class="status-badge status-pending">待確認</span>
+                            {% elif apt.status == 'confirmed' %}
+                                <span class="status-badge status-confirmed">已確認</span>
+                            {% elif apt.status == 'cancelled' %}
+                                <span class="status-badge status-cancelled">已取消</span>
+                            {% else %}
+                                <span class="status-badge">{{ apt.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if apt.status == 'pending' %}
+                            <button class="btn btn-danger" onclick="cancelAppointment({{ apt.id }})">
+                                <i class="fa-solid fa-times"></i> 取消
+                            </button>
+                            {% else %}
+                            <span style="color: #6c757d;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if apt.symptoms %}
+                    <tr>
+                        <td colspan="8" style="background: #f8f9fa; color: #6c757d; font-size: 14px;">
+                            <strong>症狀描述：</strong>{{ apt.symptoms }}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <i class="fa-solid fa-calendar-xmark"></i>
+                <h3>尚無預約記錄</h3>
+                <p>您還沒有任何預約記錄，點擊上方「新增預約」按鈕開始預約門診。</p>
+                <a href="/appointment" class="btn btn-primary" style="margin-top: 20px;">
+                    <i class="fa-solid fa-plus"></i> 立即預約
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <script>
+        async function cancelAppointment(appointmentId) {
+            if (!confirm('確定要取消此預約嗎？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/appointment/cancel/${appointmentId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('預約已成功取消');
+                    location.reload();
+                } else {
+                    alert('取消預約失敗：' + (data.error || '未知錯誤'));
+                }
+            } catch (error) {
+                console.error('取消預約錯誤:', error);
+                alert('發生錯誤，請稍後再試');
+            }
+        }
+    </script>
+</body>
+</html>
+

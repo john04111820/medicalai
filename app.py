@@ -5,6 +5,9 @@ import os
 import tempfile
 import google.generativeai as genai
 from dotenv import load_dotenv
+import pymysql
+from datetime import datetime, timedelta
+from functools import wraps
 
 # === 1. 強制載入 .env ===
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -14,13 +17,107 @@ load_dotenv(env_path)
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
+# === MySQL 資料庫配置 ===
+# 確保環境變數已載入
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_USER = os.getenv('DB_USER', 'root')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+DB_NAME = os.getenv('DB_NAME', 'medical_db')
+
+# 輸出配置資訊（用於調試）
+print("=" * 50)
+print("資料庫配置資訊：")
+print(f"Host: {DB_HOST}")
+print(f"User: {DB_USER}")
+print(f"Database: {DB_NAME}")
+print("=" * 50)
+
+DB_CONFIG = {
+    'host': DB_HOST,
+    'user': DB_USER,
+    'password': DB_PASSWORD,
+    'database': DB_NAME,
+    'charset': 'utf8mb4',
+    'ssl_disabled': True  # Azure MySQL 可能需要 SSL，如果連接失敗請改為 False
+}
+
+def get_db_connection():
+    """獲取資料庫連接"""
+    try:
+        # 如果是 Azure MySQL，嘗試使用 SSL 連接
+        if 'azure' in DB_CONFIG.get('host', '').lower():
+            # Azure MySQL 通常需要 SSL，但如果連接失敗可以禁用
+            connection = pymysql.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                database=DB_CONFIG['database'],
+                charset=DB_CONFIG['charset'],
+                ssl={'ssl_disabled': True}  # Azure 連接選項
+            )
+        else:
+            connection = pymysql.connect(**DB_CONFIG)
+        return connection
+    except Exception as e:
+        print(f"資料庫連接錯誤: {e}")
+        print(f"嘗試連接的資料庫: {DB_CONFIG['host']} / {DB_CONFIG['database']}")
+        return None
+
+def init_database():
+    """初始化資料庫表結構"""
+    connection = get_db_connection()
+    if not connection:
+        print("無法連接到資料庫，跳過表初始化")
+        return
+    
+    try:
+        with connection.cursor() as cursor:
+            # 創建預約表（使用新表名避免與現有表衝突）
+            create_appointments_table = """
+            CREATE TABLE IF NOT EXISTS medical_appointments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(100) NOT NULL,
+                patient_name VARCHAR(100) NOT NULL,
+                patient_phone VARCHAR(20) NOT NULL,
+                department VARCHAR(100) NOT NULL,
+                doctor_name VARCHAR(100) NOT NULL,
+                appointment_date DATE NOT NULL,
+                appointment_time TIME NOT NULL,
+                symptoms TEXT,
+                status VARCHAR(20) DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_username (username),
+                INDEX idx_appointment_date (appointment_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """
+            cursor.execute(create_appointments_table)
+            connection.commit()
+            print("[成功] 資料庫表初始化成功")
+    except Exception as e:
+        print(f"[錯誤] 資料庫表初始化失敗: {e}")
+    finally:
+        connection.close()
+
+# 初始化資料庫
+init_database()
+
+def login_required(f):
+    """登入驗證裝飾器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # === 2. 初始化 Gemini 模型 (更新版：支援 Gemini 2.0) ===
 gemini_model = None
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 print("=" * 50)
 if gemini_api_key:
-    print(f"✅ 讀取到 API Key (前綴: {gemini_api_key[:5]}...)")
+    print(f"[成功] 讀取到 API Key (前綴: {gemini_api_key[:5]}...)")
     try:
         genai.configure(api_key=gemini_api_key)
         
@@ -48,7 +145,7 @@ if gemini_api_key:
                 # print(f"   -> 錯誤原因: {e}") # 暫時隱藏詳細錯誤保持版面乾淨
         
         if not gemini_model:
-            print("\n❌ 所有模型測試均失敗。嘗試使用最後手段：自動搜尋...")
+            print("\n[錯誤] 所有模型測試均失敗。嘗試使用最後手段：自動搜尋...")
             # 如果上面的清單都失敗，嘗試從您的可用列表中抓取第一個 'flash' 模型
             try:
                 for m in genai.list_models():
@@ -62,12 +159,12 @@ if gemini_api_key:
                 pass
 
         if not gemini_model:
-             print("❌ 嚴重錯誤：無法初始化任何 AI 模型。")
+             print("[錯誤] 嚴重錯誤：無法初始化任何 AI 模型。")
 
     except Exception as e:
-        print(f"❌ Gemini 設定發生嚴重錯誤: {e}")
+        print(f"[錯誤] Gemini 設定發生嚴重錯誤: {e}")
 else:
-    print("❌ 嚴重錯誤：找不到 GEMINI_API_KEY 環境變數！")
+    print("[錯誤] 嚴重錯誤：找不到 GEMINI_API_KEY 環境變數！")
 print("=" * 50)
 
 
@@ -181,6 +278,175 @@ def chat():
 @app.route("/api/clear-history", methods=["POST"])
 def clear_history():
     return jsonify({"success": True})
+
+# === 預約門診相關路由 ===
+@app.route("/appointment", methods=["GET", "POST"])
+@login_required
+def appointment():
+    """預約門診頁面"""
+    # 計算最小日期（明天）
+    min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    if request.method == "POST":
+        try:
+            patient_name = request.form.get("patient_name", "").strip()
+            patient_phone = request.form.get("patient_phone", "").strip()
+            department = request.form.get("department", "").strip()
+            doctor_name = request.form.get("doctor_name", "").strip()
+            appointment_date = request.form.get("appointment_date", "").strip()
+            appointment_time = request.form.get("appointment_time", "").strip()
+            symptoms = request.form.get("symptoms", "").strip()
+            
+            # 驗證必填欄位
+            if not all([patient_name, patient_phone, department, doctor_name, appointment_date, appointment_time]):
+                return render_template("appointment.html", 
+                                     username=session.get("user"),
+                                     error="請填寫所有必填欄位",
+                                     form_data=request.form,
+                                     min_date=min_date)
+            
+            # 驗證日期格式
+            try:
+                appointment_datetime = datetime.strptime(f"{appointment_date} {appointment_time}", "%Y-%m-%d %H:%M")
+                if appointment_datetime < datetime.now():
+                    return render_template("appointment.html",
+                                         username=session.get("user"),
+                                         error="預約時間不能是過去時間",
+                                         form_data=request.form,
+                                         min_date=min_date)
+            except ValueError:
+                return render_template("appointment.html",
+                                     username=session.get("user"),
+                                     error="日期或時間格式錯誤",
+                                     form_data=request.form,
+                                     min_date=min_date)
+            
+            # 插入資料庫
+            connection = get_db_connection()
+            if not connection:
+                return render_template("appointment.html",
+                                     username=session.get("user"),
+                                     error="資料庫連接失敗，請稍後再試",
+                                     form_data=request.form,
+                                     min_date=min_date)
+            
+            try:
+                with connection.cursor() as cursor:
+                    sql = """
+                    INSERT INTO medical_appointments 
+                    (username, patient_name, patient_phone, department, doctor_name, 
+                     appointment_date, appointment_time, symptoms, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+                    """
+                    cursor.execute(sql, (
+                        session.get("user"),
+                        patient_name,
+                        patient_phone,
+                        department,
+                        doctor_name,
+                        appointment_date,
+                        appointment_time,
+                        symptoms
+                    ))
+                    connection.commit()
+                    return redirect(url_for("appointment_list", success="預約成功！"))
+            except Exception as e:
+                connection.rollback()
+                print(f"預約失敗: {e}")
+                return render_template("appointment.html",
+                                     username=session.get("user"),
+                                     error=f"預約失敗：{str(e)}",
+                                     form_data=request.form,
+                                     min_date=min_date)
+            finally:
+                connection.close()
+        
+        except Exception as e:
+            print(f"處理預約時發生錯誤: {e}")
+            return render_template("appointment.html",
+                                 username=session.get("user"),
+                                 error="發生錯誤，請稍後再試",
+                                 form_data=request.form,
+                                 min_date=min_date)
+    
+    return render_template("appointment.html", username=session.get("user"), min_date=min_date)
+
+@app.route("/appointment/list")
+@login_required
+def appointment_list():
+    """查看預約記錄"""
+    connection = get_db_connection()
+    if not connection:
+        return render_template("appointment_list.html",
+                             username=session.get("user"),
+                             appointments=[],
+                             error="資料庫連接失敗")
+    
+    try:
+        with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+            sql = """
+            SELECT id, patient_name, patient_phone, department, doctor_name,
+                   appointment_date, appointment_time, symptoms, status, created_at
+            FROM medical_appointments
+            WHERE username = %s
+            ORDER BY appointment_date DESC, appointment_time DESC
+            """
+            cursor.execute(sql, (session.get("user"),))
+            appointments = cursor.fetchall()
+            
+            # 轉換日期時間格式
+            for apt in appointments:
+                if apt['appointment_date']:
+                    apt['appointment_date'] = apt['appointment_date'].strftime('%Y-%m-%d')
+                if apt['appointment_time']:
+                    apt['appointment_time'] = apt['appointment_time'].strftime('%H:%M')
+                if apt['created_at']:
+                    apt['created_at'] = apt['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+            
+            success_msg = request.args.get("success", "")
+            return render_template("appointment_list.html",
+                                 username=session.get("user"),
+                                 appointments=appointments,
+                                 success=success_msg)
+    except Exception as e:
+        print(f"查詢預約記錄失敗: {e}")
+        return render_template("appointment_list.html",
+                             username=session.get("user"),
+                             appointments=[],
+                             error="查詢失敗")
+    finally:
+        connection.close()
+
+@app.route("/appointment/cancel/<int:appointment_id>", methods=["POST"])
+@login_required
+def cancel_appointment(appointment_id):
+    """取消預約"""
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({"success": False, "error": "資料庫連接失敗"}), 500
+    
+    try:
+        with connection.cursor() as cursor:
+            # 檢查預約是否屬於當前用戶
+            check_sql = "SELECT username FROM medical_appointments WHERE id = %s"
+            cursor.execute(check_sql, (appointment_id,))
+            result = cursor.fetchone()
+            
+            if not result or result[0] != session.get("user"):
+                return jsonify({"success": False, "error": "無權限取消此預約"}), 403
+            
+            # 更新狀態為已取消
+            update_sql = "UPDATE medical_appointments SET status = 'cancelled' WHERE id = %s"
+            cursor.execute(update_sql, (appointment_id,))
+            connection.commit()
+            
+            return jsonify({"success": True, "message": "預約已取消"})
+    except Exception as e:
+        connection.rollback()
+        print(f"取消預約失敗: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        connection.close()
 
 if __name__ == "__main__":
     app.run(debug=True)
