@@ -33,11 +33,25 @@ body {
     background-color: rgba(255, 255, 255, 0.7); /* 半透明背景 */
     padding: 8px 12px;
     border-radius: 8px;
+    text-decoration: none; /* 移除連結底線 */
+    transition: all 0.3s ease; /* 平滑過渡效果 */
+    cursor: pointer; /* 顯示手型游標 */
+}
+
+.logo-container:hover {
+    background-color: rgba(255, 255, 255, 0.9); /* 懸停時更不透明 */
+    transform: translateY(-2px); /* 輕微上移效果 */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); /* 添加陰影 */
 }
 
 .logo-container i {
     margin-right: 8px;
     color: #d9534f; /* 醫院十字圖示的顏色 */
+    transition: color 0.3s ease;
+}
+
+.logo-container:hover i {
+    color: #c9302c; /* 懸停時圖示顏色變深 */
 }
 
 /* --- 3. 主要內容佈局 (聊天界面) --- */

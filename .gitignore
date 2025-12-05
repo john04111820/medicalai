@@ -56,6 +56,13 @@ Thumbs.db
 setup_azure.py
 setup_azure_force.py
 
+# SQLite database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.db.backup_*
+
 # Temporary files
 *.tmp
 temp/

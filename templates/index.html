@@ -28,10 +28,10 @@
     </div>
 
     <!-- === 左上角 Logo === -->
-    <header class="logo-container">
+    <a href="/" class="logo-container" title="返回首頁">
         <i class="fa-solid fa-hospital"></i>
         <span>醫資醫院</span>
-    </header>
+    </a>
 
     <!-- === 主要內容 === -->
     <main class="main-container">
@@ -126,6 +126,8 @@
         let mediaRecorder = null;
         let audioChunks = [];
         let isRecording = false;
+        let isLoadingHistory = false; // 標記是否正在載入歷史記錄
+
 
         // 檢查瀏覽器是否支持錄音
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -152,6 +154,8 @@
                     });
                     const data = await response.json();
                     if (data.success) {
+                        // 清除 localStorage
+                        localStorage.removeItem('chatHistory');
                         chatContainer.innerHTML = `
                             <div class="welcome-message">
                                 <i class="fa-solid fa-robot"></i>
@@ -164,6 +168,11 @@
                     console.error('清除對話歷史失敗:', error);
                 }
             }
+        });
+
+        // 頁面載入時恢復對話記錄
+        window.addEventListener('DOMContentLoaded', () => {
+            loadChatHistory();
         });
 
         micButton.addEventListener('click', async () => {
@@ -324,16 +333,77 @@
             }
         }
 
+        // 保存對話記錄到 localStorage
+        function saveChatHistory() {
+            // 如果正在載入歷史記錄，不保存
+            if (isLoadingHistory) {
+                return;
+            }
+            
+            const messages = [];
+            const messageElements = chatContainer.querySelectorAll('.message');
+            messageElements.forEach(msg => {
+                const role = msg.classList.contains('user-message') ? 'user' : 'assistant';
+                const contentElement = msg.querySelector('.message-text');
+                if (contentElement && !contentElement.querySelector('.typing-indicator')) {
+                    const content = contentElement.textContent || contentElement.innerText;
+                    const timeElement = msg.querySelector('.message-time');
+                    const time = timeElement ? timeElement.textContent : getCurrentTime();
+                    messages.push({ role, content, time });
+                }
+            });
+            localStorage.setItem('chatHistory', JSON.stringify(messages));
+        }
+
+        // 從 localStorage 載入對話記錄
+        function loadChatHistory() {
+            // 檢查頁面上是否已經有消息（除了歡迎消息）
+            const existingMessages = chatContainer.querySelectorAll('.message');
+            if (existingMessages.length > 0) {
+                // 如果已經有消息，不載入（避免重複）
+                return false;
+            }
+            
+            try {
+                isLoadingHistory = true; // 設置載入標記
+                
+                const savedHistory = localStorage.getItem('chatHistory');
+                if (savedHistory) {
+                    const messages = JSON.parse(savedHistory);
+                    if (messages && messages.length > 0) {
+                        // 移除歡迎消息
+                        const welcomeMsg = chatContainer.querySelector('.welcome-message');
+                        if (welcomeMsg) {
+                            welcomeMsg.remove();
+                        }
+                        // 恢復所有消息（不觸發保存）
+                        messages.forEach(msg => {
+                            addMessageToChat(msg.role, msg.content, false, msg.time, true);
+                        });
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.error('載入對話記錄失敗:', error);
+            } finally {
+                isLoadingHistory = false; // 清除載入標記
+            }
+            return false;
+        }
+
         // 添加消息到聊天界面
-        function addMessageToChat(role, content, isTyping = false) {
+        function addMessageToChat(role, content, isTyping = false, customTime = null, skipSave = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}-message`;
+            
+            const messageTime = customTime || getCurrentTime();
             
             if (role === 'user') {
                 messageDiv.innerHTML = `
                     <div class="message-content">
                         <div class="message-text">${escapeHtml(content)}</div>
-                        <div class="message-time">${getCurrentTime()}</div>
+                        <div class="message-time">${messageTime}</div>
                     </div>
                     <div class="message-avatar">
                         <i class="fa-solid fa-user"></i>
@@ -346,7 +416,7 @@
                     </div>
                     <div class="message-content">
                         <div class="message-text">${isTyping ? '<span class="typing-indicator">正在輸入...</span>' : escapeHtml(content)}</div>
-                        <div class="message-time">${getCurrentTime()}</div>
+                        <div class="message-time">${messageTime}</div>
                     </div>
                 `;
             }
@@ -359,6 +429,11 @@
             
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            
+            // 如果不是正在輸入的臨時消息，且不是載入歷史記錄時，保存對話記錄
+            if (!isTyping && !skipSave && !isLoadingHistory) {
+                saveChatHistory();
+            }
             
             return messageDiv;
         }
@@ -388,6 +463,14 @@
                 }
             });
         });
+
+        // 頁面載入完成後恢復對話記錄
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadChatHistory);
+        } else {
+            // DOM 已經載入完成
+            loadChatHistory();
+        }
     </script>
 
 </body>

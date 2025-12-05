@@ -142,10 +142,10 @@
     </div>
 
     <!-- === 左上角 Logo === -->
-    <header class="logo-container">
+    <a href="/" class="logo-container" title="返回首頁">
         <i class="fa-solid fa-hospital"></i>
         <span>醫資醫院</span>
-    </header>
+    </a>
 
     <!-- === 主要內容 === -->
     <main class="main-container">
@@ -173,6 +173,7 @@
             <table class="appointment-table">
                 <thead>
                     <tr>
+                        <th>病歷號</th>
                         <th>預約日期</th>
                         <th>預約時間</th>
                         <th>病患姓名</th>
@@ -186,6 +187,7 @@
                 <tbody>
                     {% for apt in appointments %}
                     <tr>
+                        <td>{{ apt.patient_id if apt.patient_id else '-' }}</td>
                         <td>{{ apt.appointment_date }}</td>
                         <td>{{ apt.appointment_time }}</td>
                         <td>{{ apt.patient_name }}</td>
