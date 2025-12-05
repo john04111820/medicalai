@@ -61,6 +61,122 @@ h1 {
     text-align: center;
 }
 
+/* --- 範例對話欄樣式 --- */
+.example-bar {
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.example-section {
+    margin-bottom: 20px;
+}
+
+.example-section:last-child {
+    margin-bottom: 0;
+}
+
+.example-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #5563DE;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid rgba(85, 99, 222, 0.2);
+}
+
+.example-label i {
+    font-size: 1.1rem;
+}
+
+.example-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.example-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background-color: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 20px;
+    color: #333;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.example-btn i {
+    font-size: 0.9rem;
+    color: #5563DE;
+}
+
+.example-btn:hover {
+    background-color: #5563DE;
+    border-color: #5563DE;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(85, 99, 222, 0.3);
+}
+
+.example-btn:hover i {
+    color: white;
+}
+
+.example-btn:active {
+    transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+    .example-buttons {
+        flex-direction: column;
+    }
+    
+    .example-btn {
+        width: 100%;
+        justify-content: flex-start;
+        padding: 12px 16px;
+    }
+    
+    .example-bar {
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    
+    .example-label {
+        font-size: 0.95rem;
+    }
+    
+    .example-btn {
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .example-bar {
+        padding: 12px;
+    }
+    
+    .example-section {
+        margin-bottom: 15px;
+    }
+    
+    .example-label {
+        font-size: 0.9rem;
+    }
+}
+
 /* --- 聊天容器 --- */
 .chat-container {
     flex: 1;

@@ -51,9 +51,11 @@ def get_db_connection():
 
 def init_database():
     """初始化資料庫表結構"""
+    print("[初始化] 開始初始化資料庫表結構...")
     connection = get_db_connection()
     if not connection:
-        print("無法連接到資料庫，跳過表初始化")
+        print("[警告] 無法連接到資料庫，跳過表初始化")
+        print("[提示] 請確認資料庫配置正確，預約功能將無法使用")
         return
     
     try:
@@ -79,11 +81,24 @@ def init_database():
             """
             cursor.execute(create_appointments_table)
             connection.commit()
-            print("[成功] 資料庫表初始化成功")
+            
+            # 驗證表是否創建成功
+            cursor.execute("SHOW TABLES LIKE 'medical_appointments'")
+            table_exists = cursor.fetchone()
+            if table_exists:
+                print("[成功] 資料庫表 'medical_appointments' 初始化成功")
+                print("[資訊] 預約資料將自動寫入此資料表")
+            else:
+                print("[警告] 資料表可能未成功創建")
+                
     except Exception as e:
         print(f"[錯誤] 資料庫表初始化失敗: {e}")
+        import traceback
+        print(f"[詳細] 錯誤堆疊: {traceback.format_exc()}")
     finally:
-        connection.close()
+        if connection:
+            connection.close()
+            print("[資訊] 資料庫連接已關閉")
 
 # 初始化資料庫
 init_database()
@@ -220,11 +235,13 @@ def transcribe_audio():
             text = result["text"].strip()
             print(f"Whisper 聽到: {text}")
             
-            # 自動觸發 Gemini 回應 (可選)
+            # 自動觸發 Gemini 回應 (可選) - 使用醫療專注提示詞
             ai_reply = ""
             if gemini_model and text:
                 try:
-                    response = gemini_model.generate_content(text)
+                    system_prompt = """您是一位專業的醫療AI助手，請使用繁體中文回覆。您專注於提供醫療相關的諮詢服務，包括症狀評估、疾病資訊、用藥注意事項等。當用戶詢問預約相關問題時，請引導用戶使用網站的「預約門診」功能。您提供的資訊僅供參考，不能替代專業醫師診斷。"""
+                    full_message = system_prompt + "\n\n用戶問題：" + text
+                    response = gemini_model.generate_content(full_message)
                     ai_reply = response.text.strip()
                 except:
                     pass
@@ -251,9 +268,38 @@ def chat():
     msg = data.get("message", "").strip()
     if not msg: return jsonify({"success": False, "error": "Empty message"}), 400
     
+    # === 構建醫療專注的系統提示詞 ===
+    system_prompt = """您是一位專業的醫療AI助手，請遵循以下規則：
+
+1. **語言要求**：請使用繁體中文回覆所有問題，使用台灣常用的醫療術語和表達方式。
+
+2. **功能定位**：您專注於提供醫療相關的諮詢服務，包括：
+   - 症狀初步評估和建議
+   - 常見疾病的基本資訊
+   - 用藥注意事項
+   - 健康生活建議
+   - 醫療知識解答
+
+3. **預約門診指引**：當用戶詢問預約、掛號、看診時間等相關問題時，請友善地引導用戶：
+   - 說明可以透過網站的「預約門診」功能進行線上預約
+   - 提醒用戶需要先登入帳號才能使用預約功能
+   - 建議用戶填寫完整的預約資訊，包括科別、醫師、日期和時間
+
+4. **重要提醒**：
+   - 您提供的資訊僅供參考，不能替代專業醫師診斷
+   - 如有緊急情況，請立即就醫或撥打119
+   - 對於複雜或嚴重的醫療問題，建議直接諮詢專業醫師
+
+5. **回應風格**：請以專業、友善、易懂的方式回覆，避免使用過於複雜的醫學術語，必要時請解釋。
+
+現在請回答用戶的問題："""
+    
+    # 組合系統提示詞和用戶訊息
+    full_message = system_prompt + "\n\n用戶問題：" + msg
+    
     print(f"傳送給 AI: {msg}")
     try:
-        response = gemini_model.generate_content(msg)
+        response = gemini_model.generate_content(full_message)
         reply = response.text.strip()
         print(f"AI 回應: {reply}")
         return jsonify({"success": True, "message": reply})
@@ -281,13 +327,31 @@ def appointment():
             doctor_name = request.form.get("doctor_name", "").strip()
             appointment_date = request.form.get("appointment_date", "").strip()
             appointment_time = request.form.get("appointment_time", "").strip()
-            symptoms = request.form.get("symptoms", "").strip()
             
             # 驗證必填欄位
             if not all([patient_name, patient_phone, department, doctor_name, appointment_date, appointment_time]):
+                missing_fields = []
+                if not patient_name: missing_fields.append("病患姓名")
+                if not patient_phone: missing_fields.append("聯絡電話")
+                if not department: missing_fields.append("科別")
+                if not doctor_name: missing_fields.append("醫師姓名")
+                if not appointment_date: missing_fields.append("預約日期")
+                if not appointment_time: missing_fields.append("預約時間")
+                
+                error_msg = f"請填寫所有必填欄位：{', '.join(missing_fields)}"
+                print(f"[驗證失敗] {error_msg}")
                 return render_template("appointment.html", 
                                      username=session.get("user"),
-                                     error="請填寫所有必填欄位",
+                                     error=error_msg,
+                                     form_data=request.form,
+                                     min_date=min_date)
+            
+            # 驗證電話號碼格式（簡單驗證）
+            if not patient_phone.replace('-', '').replace(' ', '').isdigit():
+                print(f"[驗證失敗] 電話號碼格式不正確: {patient_phone}")
+                return render_template("appointment.html",
+                                     username=session.get("user"),
+                                     error="電話號碼格式不正確，請輸入有效的電話號碼",
                                      form_data=request.form,
                                      min_date=min_date)
             
@@ -310,6 +374,7 @@ def appointment():
             # 插入資料庫
             connection = get_db_connection()
             if not connection:
+                print("[錯誤] 資料庫連接失敗，無法寫入預約資料")
                 return render_template("appointment.html",
                                      username=session.get("user"),
                                      error="資料庫連接失敗，請稍後再試",
@@ -322,30 +387,64 @@ def appointment():
                     INSERT INTO medical_appointments 
                     (username, patient_name, patient_phone, department, doctor_name, 
                      appointment_date, appointment_time, symptoms, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending')
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, 'pending')
                     """
-                    cursor.execute(sql, (
+                    
+                    # 準備插入的資料（只包含必填欄位）
+                    insert_data = (
                         session.get("user"),
                         patient_name,
                         patient_phone,
                         department,
                         doctor_name,
                         appointment_date,
-                        appointment_time,
-                        symptoms
-                    ))
+                        appointment_time
+                    )
+                    
+                    # 記錄即將寫入的資料（不包含敏感資訊）
+                    print(f"[預約] 開始寫入資料庫 - 用戶: {session.get('user')}, 病患: {patient_name}, 科別: {department}, 醫師: {doctor_name}, 日期: {appointment_date}, 時間: {appointment_time}")
+                    
+                    # 執行插入
+                    cursor.execute(sql, insert_data)
+                    
+                    # 獲取插入的記錄 ID
+                    appointment_id = cursor.lastrowid
+                    
+                    # 提交事務
                     connection.commit()
-                    return redirect(url_for("appointment_list", success="預約成功！"))
-            except Exception as e:
+                    
+                    # 記錄成功訊息
+                    print(f"[成功] 預約資料已成功寫入資料庫，預約ID: {appointment_id}")
+                    print(f"[詳細] 預約資訊 - ID: {appointment_id}, 用戶: {session.get('user')}, 病患: {patient_name}, 電話: {patient_phone}, 科別: {department}, 醫師: {doctor_name}, 日期時間: {appointment_date} {appointment_time}")
+                    
+                    return redirect(url_for("appointment_list", success="預約成功！資料已自動寫入資料庫。"))
+                    
+            except pymysql.Error as db_error:
                 connection.rollback()
-                print(f"預約失敗: {e}")
+                error_msg = f"資料庫錯誤：{str(db_error)}"
+                print(f"[錯誤] 預約寫入資料庫失敗: {error_msg}")
+                print(f"[詳細] 嘗試寫入的資料 - 用戶: {session.get('user')}, 病患: {patient_name}, 科別: {department}")
                 return render_template("appointment.html",
                                      username=session.get("user"),
-                                     error=f"預約失敗：{str(e)}",
+                                     error=f"預約失敗：{error_msg}",
+                                     form_data=request.form,
+                                     min_date=min_date)
+            except Exception as e:
+                connection.rollback()
+                error_msg = f"系統錯誤：{str(e)}"
+                print(f"[錯誤] 預約處理時發生未預期的錯誤: {error_msg}")
+                print(f"[詳細] 錯誤類型: {type(e).__name__}")
+                import traceback
+                print(f"[詳細] 錯誤堆疊: {traceback.format_exc()}")
+                return render_template("appointment.html",
+                                     username=session.get("user"),
+                                     error=f"預約失敗：{error_msg}",
                                      form_data=request.form,
                                      min_date=min_date)
             finally:
-                connection.close()
+                if connection:
+                    connection.close()
+                    print("[資訊] 資料庫連接已關閉")
         
         except Exception as e:
             print(f"處理預約時發生錯誤: {e}")
@@ -402,6 +501,50 @@ def appointment_list():
                              error="查詢失敗")
     finally:
         connection.close()
+
+@app.route("/appointment/test-db", methods=["GET"])
+@login_required
+def test_database():
+    """測試資料庫連接和寫入功能"""
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({
+            "success": False,
+            "error": "資料庫連接失敗",
+            "message": "無法連接到資料庫，請檢查資料庫配置"
+        }), 500
+    
+    try:
+        with connection.cursor() as cursor:
+            # 測試查詢
+            cursor.execute("SELECT COUNT(*) as count FROM medical_appointments WHERE username = %s", (session.get("user"),))
+            result = cursor.fetchone()
+            count = result[0] if result else 0
+            
+            # 檢查表結構
+            cursor.execute("DESCRIBE medical_appointments")
+            columns = cursor.fetchall()
+            column_names = [col[0] for col in columns]
+            
+            return jsonify({
+                "success": True,
+                "message": "資料庫連接正常",
+                "user_appointments_count": count,
+                "table_columns": column_names,
+                "database_info": {
+                    "host": DB_CONFIG.get('host', 'N/A'),
+                    "database": DB_CONFIG.get('database', 'N/A')
+                }
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "資料庫測試失敗"
+        }), 500
+    finally:
+        if connection:
+            connection.close()
 
 @app.route("/appointment/cancel/<int:appointment_id>", methods=["POST"])
 @login_required

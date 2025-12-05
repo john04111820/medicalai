@@ -37,11 +37,52 @@
     <main class="main-container">
         <h1>醫療AI聊天助手</h1>
         
+        <!-- 範例對話欄 -->
+        <div class="example-bar">
+            <div class="example-section">
+                <div class="example-label">
+                    <i class="fa-solid fa-calendar-check"></i>
+                    <span>預約門診範例</span>
+                </div>
+                <div class="example-buttons">
+                    <button class="example-btn" data-example="我想預約內科門診，請問該如何操作？">
+                        <i class="fa-solid fa-stethoscope"></i> 如何預約門診？
+                    </button>
+                    <button class="example-btn" data-example="我想預約明天下午的內科門診，可以嗎？">
+                        <i class="fa-solid fa-clock"></i> 預約明天門診
+                    </button>
+                    <button class="example-btn" data-example="我想預約兒科門診，需要準備什麼資料？">
+                        <i class="fa-solid fa-child"></i> 預約需要準備什麼？
+                    </button>
+                </div>
+            </div>
+            <div class="example-section">
+                <div class="example-label">
+                    <i class="fa-solid fa-heart-pulse"></i>
+                    <span>常見疾病資訊</span>
+                </div>
+                <div class="example-buttons">
+                    <button class="example-btn" data-example="感冒的症狀有哪些？該如何處理？">
+                        <i class="fa-solid fa-head-side-cough"></i> 感冒症狀
+                    </button>
+                    <button class="example-btn" data-example="高血壓需要注意什麼？飲食上有什麼建議？">
+                        <i class="fa-solid fa-heartbeat"></i> 高血壓注意事項
+                    </button>
+                    <button class="example-btn" data-example="頭痛可能是什麼原因？什麼時候需要看醫生？">
+                        <i class="fa-solid fa-head-side-virus"></i> 頭痛原因
+                    </button>
+                    <button class="example-btn" data-example="胃痛該如何緩解？什麼情況下需要就醫？">
+                        <i class="fa-solid fa-stomach"></i> 胃痛處理
+                    </button>
+                </div>
+            </div>
+        </div>
+        
         <!-- 聊天消息顯示區域 -->
         <div class="chat-container" id="chatContainer">
             <div class="welcome-message">
                 <i class="fa-solid fa-robot"></i>
-                <p>您好！我是醫療AI助手，可以幫助您解答醫療相關問題。您可以輸入文字或使用語音輸入。</p>
+                <p>您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。如需預約門診，請點擊右上角的「預約門診」按鈕。您可以輸入文字或使用語音輸入與我對話。</p>
             </div>
         </div>
         
@@ -114,7 +155,7 @@
                         chatContainer.innerHTML = `
                             <div class="welcome-message">
                                 <i class="fa-solid fa-robot"></i>
-                                <p>您好！我是醫療AI助手，可以幫助您解答醫療相關問題。您可以輸入文字或使用語音輸入。</p>
+                                <p>您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。如需預約門診，請點擊右上角的「預約門診」按鈕。您可以輸入文字或使用語音輸入與我對話。</p>
                             </div>
                         `;
                         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -334,6 +375,19 @@
             const now = new Date();
             return now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
         }
+
+        // 範例對話按鈕點擊事件
+        document.querySelectorAll('.example-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const exampleText = this.getAttribute('data-example');
+                if (exampleText) {
+                    // 將範例文字填入輸入框
+                    textInput.value = exampleText;
+                    // 自動發送消息
+                    sendMessage();
+                }
+            });
+        });
     </script>
 
 </body>

@@ -160,3 +160,5 @@ pip install -r requirements.txt
 ✅ **功能完整** - 與付費版本功能相同  
 ✅ **易於設置** - 簡單的 API Key 設置  
 
+
+
