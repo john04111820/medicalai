@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: medicalai
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+    plan: starter  # 或 free（免費層資源較少，可能無法運行 Whisper）
+
+
+
+
+
