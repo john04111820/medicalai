@@ -5,12 +5,12 @@ import os
 import tempfile
 import google.generativeai as genai
 from dotenv import load_dotenv
-import pymysql
+import sqlite3 # 改用 sqlite3
 from datetime import datetime, timedelta
 from functools import wraps
 
 print("="*50)
-print("啟動 Azure 連線版應用程式 (v5.0 Force)")
+print("啟動 SQLite 本地版應用程式")
 print("="*50)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -18,39 +18,44 @@ load_dotenv(os.path.join(basedir, '.env'))
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
+DB_FILE = os.path.join(basedir, 'medical.db') # 設定 SQLite 資料庫檔案路徑
 
-# === Azure 資料庫連線 ===
+# === SQLite 資料庫連線 ===
 def get_db_connection():
     try:
-        # 讀取環境變數
-        host = os.getenv('DB_HOST')
-        user = os.getenv('DB_USER')
-        password = os.getenv('DB_PASSWORD')
-        database = os.getenv('DB_NAME')
-
-        if not all([host, user, password, database]):
-            print("❌ 錯誤：缺少資料庫設定，請先執行 setup_azure_force.py")
-            return None
-
-        # 設定連線參數
-        config = {
-            'host': host,
-            'user': user,
-            'password': password,
-            'database': database,
-            'charset': 'utf8mb4',
-            'cursorclass': pymysql.cursors.DictCursor
-        }
-
-        # Azure 強制 SSL 處理
-        # 只要是 Azure 主機，就自動加入 SSL 參數
-        if 'azure' in host.lower():
-            config['ssl'] = {'ssl_disabled': True}
-
-        return pymysql.connect(**config)
+        conn = sqlite3.connect(DB_FILE)
+        # 設定 row_factory 讓查詢結果可以用欄位名稱存取 (類似 pymysql 的 DictCursor)
+        conn.row_factory = sqlite3.Row 
+        return conn
     except Exception as e:
         print(f"❌ 資料庫連線失敗: {e}")
         return None
+
+# === 初始化資料庫 (自動建立資料表) ===
+def init_db():
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS medical_appointments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                patient_name TEXT NOT NULL,
+                patient_phone TEXT NOT NULL,
+                department TEXT NOT NULL,
+                doctor_name TEXT NOT NULL,
+                appointment_date TEXT NOT NULL,
+                appointment_time TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        print("✅ SQLite 資料庫初始化完成")
+
+# 應用程式啟動時執行初始化
+init_db()
 
 def login_required(f):
     @wraps(f)
@@ -101,17 +106,19 @@ def appointment():
     if request.method == "POST":
         form = request.form
         conn = get_db_connection()
-        if not conn: return render_template("appointment.html", username=session.get("user"), error="無法連線到 Azure 資料庫 (請檢查防火牆)", form_data=form, min_date=min_date)
+        if not conn: return render_template("appointment.html", username=session.get("user"), error="無法連線到資料庫", form_data=form, min_date=min_date)
         
         try:
-            with conn.cursor() as cursor:
-                sql = "INSERT INTO medical_appointments (username, patient_name, patient_phone, department, doctor_name, appointment_date, appointment_time, status) VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')"
-                cursor.execute(sql, (session.get("user"), form["patient_name"], form["patient_phone"], form["department"], form["doctor_name"], form["appointment_date"], form["appointment_time"]))
-                conn.commit()
-                return redirect(url_for("appointment_list", success="預約成功！(已寫入 Azure)"))
+            # SQLite 使用 cursor 直接操作，不需要 context manager 的寫法 (雖然也可以用)
+            cursor = conn.cursor()
+            # 注意：SQLite 的佔位符是 ? 而不是 %s
+            sql = "INSERT INTO medical_appointments (username, patient_name, patient_phone, department, doctor_name, appointment_date, appointment_time, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')"
+            cursor.execute(sql, (session.get("user"), form["patient_name"], form["patient_phone"], form["department"], form["doctor_name"], form["appointment_date"], form["appointment_time"]))
+            conn.commit()
+            return redirect(url_for("appointment_list", success="預約成功！(已寫入 SQLite)"))
         except Exception as e:
-            print(f"Azure 寫入錯誤: {e}")
-            return render_template("appointment.html", username=session.get("user"), error=f"Azure 錯誤: {str(e)}", form_data=form, min_date=min_date)
+            print(f"SQLite 寫入錯誤: {e}")
+            return render_template("appointment.html", username=session.get("user"), error=f"資料庫錯誤: {str(e)}", form_data=form, min_date=min_date)
         finally: conn.close()
     return render_template("appointment.html", username=session.get("user"), min_date=min_date)
 
@@ -119,11 +126,13 @@ def appointment():
 @login_required
 def appointment_list():
     conn = get_db_connection()
-    if not conn: return render_template("appointment_list.html", username=session.get("user"), appointments=[], error="無法連線到 Azure")
+    if not conn: return render_template("appointment_list.html", username=session.get("user"), appointments=[], error="無法連線到資料庫")
     try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM medical_appointments WHERE username=%s ORDER BY appointment_date DESC", (session.get("user"),))
-            return render_template("appointment_list.html", username=session.get("user"), appointments=cursor.fetchall(), success=request.args.get("success"))
+        cursor = conn.cursor()
+        # 注意：SQLite 的佔位符是 ?
+        cursor.execute("SELECT * FROM medical_appointments WHERE username=? ORDER BY appointment_date DESC", (session.get("user"),))
+        appointments = cursor.fetchall()
+        return render_template("appointment_list.html", username=session.get("user"), appointments=appointments, success=request.args.get("success"))
     except Exception as e:
         return render_template("appointment_list.html", username=session.get("user"), appointments=[], error=str(e))
     finally: conn.close()
@@ -135,15 +144,17 @@ def transcribe_audio(): return jsonify({"success": True, "text": "測試", "ai_r
 def chat(): return jsonify({"success": True, "message": "..."})
 @app.route("/api/clear-history", methods=["POST"])
 def clear_history(): return jsonify({"success": True})
+
 @app.route("/appointment/cancel/<int:id>", methods=["POST"])
 @login_required
 def cancel_appointment(id):
     conn = get_db_connection()
     if not conn: return jsonify({"success": False}), 500
     try:
-        with conn.cursor() as c:
-            c.execute("UPDATE medical_appointments SET status='cancelled' WHERE id=%s", (id,))
-            conn.commit()
+        cursor = conn.cursor()
+        # 注意：SQLite 的佔位符是 ?
+        cursor.execute("UPDATE medical_appointments SET status='cancelled' WHERE id=?", (id,))
+        conn.commit()
         return jsonify({"success": True})
     finally: conn.close()
 
