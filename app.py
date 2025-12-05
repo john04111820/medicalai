@@ -18,25 +18,11 @@ app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
 # === MySQL 資料庫配置 ===
-# 確保環境變數已載入
-DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_USER = os.getenv('DB_USER', 'root')
-DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-DB_NAME = os.getenv('DB_NAME', 'medical_db')
-
-# 輸出配置資訊（用於調試）
-print("=" * 50)
-print("資料庫配置資訊：")
-print(f"Host: {DB_HOST}")
-print(f"User: {DB_USER}")
-print(f"Database: {DB_NAME}")
-print("=" * 50)
-
 DB_CONFIG = {
-    'host': DB_HOST,
-    'user': DB_USER,
-    'password': DB_PASSWORD,
-    'database': DB_NAME,
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_NAME', 'medical_db'),
     'charset': 'utf8mb4',
     'ssl_disabled': True  # Azure MySQL 可能需要 SSL，如果連接失敗請改為 False
 }
@@ -117,7 +103,7 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 print("=" * 50)
 if gemini_api_key:
-    print(f"[成功] 讀取到 API Key (前綴: {gemini_api_key[:5]}...)")
+    print(f"✅ 讀取到 API Key (前綴: {gemini_api_key[:5]}...)")
     try:
         genai.configure(api_key=gemini_api_key)
         
@@ -145,7 +131,7 @@ if gemini_api_key:
                 # print(f"   -> 錯誤原因: {e}") # 暫時隱藏詳細錯誤保持版面乾淨
         
         if not gemini_model:
-            print("\n[錯誤] 所有模型測試均失敗。嘗試使用最後手段：自動搜尋...")
+            print("\n❌ 所有模型測試均失敗。嘗試使用最後手段：自動搜尋...")
             # 如果上面的清單都失敗，嘗試從您的可用列表中抓取第一個 'flash' 模型
             try:
                 for m in genai.list_models():
@@ -159,12 +145,12 @@ if gemini_api_key:
                 pass
 
         if not gemini_model:
-             print("[錯誤] 嚴重錯誤：無法初始化任何 AI 模型。")
+             print("❌ 嚴重錯誤：無法初始化任何 AI 模型。")
 
     except Exception as e:
-        print(f"[錯誤] Gemini 設定發生嚴重錯誤: {e}")
+        print(f"❌ Gemini 設定發生嚴重錯誤: {e}")
 else:
-    print("[錯誤] 嚴重錯誤：找不到 GEMINI_API_KEY 環境變數！")
+    print("❌ 嚴重錯誤：找不到 GEMINI_API_KEY 環境變數！")
 print("=" * 50)
 
 

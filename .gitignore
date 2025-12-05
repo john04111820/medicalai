@@ -52,6 +52,10 @@ Thumbs.db
 .env
 .env.local
 
+# Setup scripts with sensitive data
+setup_azure.py
+setup_azure_force.py
+
 # Temporary files
 *.tmp
 temp/
