@@ -420,20 +420,53 @@ def appointment():
                     # 提交事務
                     connection.commit()
                     
-                    # 記錄成功訊息
-                    print(f"[成功] 預約資料已成功寫入資料庫，預約ID: {appointment_id}")
-                    print(f"[詳細] 預約資訊 - ID: {appointment_id}, 用戶: {session.get('user')}, 病患: {patient_name}, 電話: {patient_phone}, 科別: {department}, 醫師: {doctor_name}, 日期時間: {appointment_date} {appointment_time}")
+                    # 驗證資料是否真的寫入成功
+                    cursor.execute("SELECT * FROM medical_appointments WHERE id = %s", (appointment_id,))
+                    verify_result = cursor.fetchone()
                     
-                    return redirect(url_for("appointment_list", success="預約成功！資料已自動寫入資料庫。"))
+                    if verify_result:
+                        # 記錄成功訊息
+                        print(f"[成功] 預約資料已成功寫入資料庫，預約ID: {appointment_id}")
+                        print(f"[詳細] 預約資訊 - ID: {appointment_id}, 用戶: {session.get('user')}, 病患: {patient_name}, 電話: {patient_phone}, 科別: {department}, 醫師: {doctor_name}, 日期時間: {appointment_date} {appointment_time}")
+                        print(f"[驗證] 資料已確認存在於資料庫中")
+                        
+                        return redirect(url_for("appointment_list", success="預約成功！資料已自動寫入資料庫。"))
+                    else:
+                        # 如果驗證失敗，回滾並報告錯誤
+                        connection.rollback()
+                        error_msg = "資料寫入後驗證失敗，資料可能未成功保存"
+                        print(f"[錯誤] {error_msg}")
+                        print(f"[詳細] 預約ID: {appointment_id} 在資料庫中不存在")
+                        return render_template("appointment.html",
+                                             username=session.get("user"),
+                                             error=f"預約失敗：{error_msg}\n\n請執行 'python 測試資料庫寫入.py' 來診斷問題",
+                                             form_data=request.form,
+                                             min_date=min_date)
                     
             except pymysql.Error as db_error:
                 connection.rollback()
+                error_code = db_error.args[0] if db_error.args else "未知"
                 error_msg = f"資料庫錯誤：{str(db_error)}"
-                print(f"[錯誤] 預約寫入資料庫失敗: {error_msg}")
-                print(f"[詳細] 嘗試寫入的資料 - 用戶: {session.get('user')}, 病患: {patient_name}, 科別: {department}")
+                print(f"[錯誤] 預約寫入資料庫失敗")
+                print(f"[錯誤代碼] {error_code}")
+                print(f"[錯誤訊息] {error_msg}")
+                print(f"[詳細] 嘗試寫入的資料 - 用戶: {session.get('user')}, 病患: {patient_name}, 科別: {department}, 醫師: {doctor_name}")
+                print(f"[詳細] 日期: {appointment_date}, 時間: {appointment_time}")
+                
+                # 根據錯誤代碼提供更詳細的錯誤訊息
+                user_friendly_error = error_msg
+                if error_code == 1146:
+                    user_friendly_error = "資料表不存在，請重新啟動應用程式以創建資料表"
+                elif error_code == 1045:
+                    user_friendly_error = "資料庫認證失敗，請檢查 .env 文件中的資料庫配置"
+                elif error_code == 2003:
+                    user_friendly_error = "無法連接到資料庫，請確認 MySQL 服務正在運行"
+                elif error_code == 1049:
+                    user_friendly_error = "資料庫不存在，請先創建資料庫"
+                
                 return render_template("appointment.html",
                                      username=session.get("user"),
-                                     error=f"預約失敗：{error_msg}",
+                                     error=f"預約失敗：{user_friendly_error}\n\n詳細錯誤：{error_msg}",
                                      form_data=request.form,
                                      min_date=min_date)
             except Exception as e:
@@ -442,10 +475,10 @@ def appointment():
                 print(f"[錯誤] 預約處理時發生未預期的錯誤: {error_msg}")
                 print(f"[詳細] 錯誤類型: {type(e).__name__}")
                 import traceback
-                print(f"[詳細] 錯誤堆疊: {traceback.format_exc()}")
+                traceback.print_exc()
                 return render_template("appointment.html",
                                      username=session.get("user"),
-                                     error=f"預約失敗：{error_msg}",
+                                     error=f"預約失敗：{error_msg}\n\n請查看應用程式日誌獲取詳細資訊，或執行 'python 測試資料庫寫入.py' 來診斷問題",
                                      form_data=request.form,
                                      min_date=min_date)
             finally:
