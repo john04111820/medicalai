@@ -375,9 +375,16 @@ def appointment():
             connection = get_db_connection()
             if not connection:
                 print("[錯誤] 資料庫連接失敗，無法寫入預約資料")
+                error_msg = """資料庫連接失敗，無法保存預約資料。
+                
+請檢查：
+1. 確認 MySQL 服務正在運行
+2. 檢查 .env 文件中的資料庫配置是否正確
+3. 確認資料庫已創建（medical_db）
+4. 執行 'python 檢查預約功能.py' 來診斷問題"""
                 return render_template("appointment.html",
                                      username=session.get("user"),
-                                     error="資料庫連接失敗，請稍後再試",
+                                     error=error_msg,
                                      form_data=request.form,
                                      min_date=min_date)
             
