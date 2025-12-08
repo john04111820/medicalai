@@ -45,13 +45,13 @@
                     <span>預約門診範例</span>
                 </div>
                 <div class="example-buttons">
-                    <button class="example-btn" data-example="我想預約內科門診，請問該如何操作？">
+                    <button class="example-btn appointment-info-btn" data-info-type="how-to-book">
                         <i class="fa-solid fa-stethoscope"></i> 如何預約門診？
                     </button>
-                    <button class="example-btn" data-example="我想預約明天下午的內科門診，可以嗎？">
+                    <button class="example-btn appointment-info-btn" data-info-type="tomorrow-booking">
                         <i class="fa-solid fa-clock"></i> 預約明天門診
                     </button>
-                    <button class="example-btn" data-example="我想預約兒科門診，需要準備什麼資料？">
+                    <button class="example-btn appointment-info-btn" data-info-type="preparation">
                         <i class="fa-solid fa-child"></i> 預約需要準備什麼？
                     </button>
                 </div>
@@ -112,6 +112,76 @@
             </div>
         </div>
     </main>
+
+    <!-- === 預約表單彈窗 === -->
+    <div id="appointmentModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:999; align-items:center; justify-content:center;">
+        <div style="background:white; width:90%; max-width:640px; border-radius:10px; padding:24px; position:relative; max-height:90vh; overflow:auto;">
+            <button id="closeModalBtn" style="position:absolute; right:12px; top:12px; border:none; background:transparent; font-size:18px; cursor:pointer;">✕</button>
+            <h2 style="margin-top:0; color:#5563DE;">快速預約</h2>
+            <form id="modalAppointmentForm">
+                <div class="form-group">
+                    <label>病歷號（選填）</label>
+                    <input type="text" name="patient_id" placeholder="如：P12345">
+                </div>
+                <div class="form-group">
+                    <label>病患姓名 <span class="required" style="color:red">*</span></label>
+                    <input type="text" name="patient_name" required placeholder="請輸入病患姓名">
+                </div>
+                <div class="form-group">
+                    <label>聯絡電話 <span class="required" style="color:red">*</span></label>
+                    <input type="tel" name="patient_phone" required placeholder="請輸入聯絡電話">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>科別 <span class="required" style="color:red">*</span></label>
+                        <select name="department" id="modalDepartment" required>
+                            <option value="">請選擇科別</option>
+                            <option value="內科">內科</option>
+                            <option value="外科">外科</option>
+                            <option value="兒科">兒科</option>
+                            <option value="婦產科">婦產科</option>
+                            <option value="骨科">骨科</option>
+                            <option value="眼科">眼科</option>
+                            <option value="耳鼻喉科">耳鼻喉科</option>
+                            <option value="皮膚科">皮膚科</option>
+                            <option value="精神科">精神科</option>
+                            <option value="復健科">復健科</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>醫師姓名 <span class="required" style="color:red">*</span></label>
+                        <select name="doctor_name" id="modalDoctor" required>
+                            <option value="">請先選擇科別</option>
+                        </select>
+                        <small style="color:#6c757d;">早班 09:00-15:00／午班 15:00-21:00</small>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>預約日期 <span class="required" style="color:red">*</span></label>
+                        <input type="date" name="appointment_date" id="modalDate" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>症狀描述（選填）</label>
+                    <textarea name="symptoms" rows="3" placeholder="簡述症狀、需求"></textarea>
+                </div>
+                <div class="btn-group" style="margin-top:12px;">
+                    <button type="submit" class="btn btn-primary" style="flex:1;">提交預約</button>
+                    <button type="button" id="cancelModalBtn" class="btn btn-secondary" style="flex:1;">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- === 醫師時刻表彈窗 === -->
+    <div id="scheduleModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:999; align-items:center; justify-content:center;">
+        <div style="background:white; width:90%; max-width:520px; border-radius:10px; padding:22px; position:relative; max-height:90vh; overflow:auto;">
+            <button id="closeScheduleBtn" style="position:absolute; right:12px; top:12px; border:none; background:transparent; font-size:18px; cursor:pointer;">✕</button>
+            <h2 id="scheduleTitle" style="margin-top:0; color:#5563DE;">醫師時刻表</h2>
+            <div id="scheduleBody"></div>
+        </div>
+    </div>
 
     <script>
         const micButton = document.getElementById('micButton');
@@ -272,11 +342,27 @@
             }
         }
 
-        // 發送消息到 Gemini
+        // 預約/時刻表 關鍵字偵測
+        const createKeywords = ['預約', '掛號', '我要預約', '幫我預約', '預約門診', '我要掛號'];
+        const scheduleKeywords = ['時間', '時段', '門診', '上班', '看診', '時刻表'];
+
+        // 發送消息到 Gemini（若判定為預約/時刻表意圖，彈出對應表單）
         async function sendMessage() {
             const message = textInput.value.trim();
-            
-            if (!message) {
+            if (!message) return;
+
+            // 檢查是否詢問時刻表
+            const deptList = Object.keys(doctorOptions || {});
+            const matchedDept = deptList.find(dept => message.includes(dept));
+            const isScheduleIntent = matchedDept && scheduleKeywords.some(k => message.includes(k));
+            if (isScheduleIntent) {
+                openScheduleModal(matchedDept);
+                return;
+            }
+
+            const isCreateIntent = createKeywords.some(k => message.includes(k));
+            if (isCreateIntent) {
+                openAppointmentModal();
                 return;
             }
             
@@ -451,24 +537,220 @@
             return now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
         }
 
-        // 範例對話按鈕點擊事件
-        document.querySelectorAll('.example-btn').forEach(button => {
+        // 預約門診說明內容
+        const appointmentInfoContent = {
+            'how-to-book': `**如何預約門診？**
+
+預約門診非常簡單，您可以透過以下方式：
+
+**方式一：使用預約表單**
+1. 點擊右上角的「預約門診」按鈕
+2. 填寫完整的預約資訊：
+   - 病患姓名（必填）
+   - 聯絡電話（必填）
+   - 選擇科別（必填）
+   - 選擇醫師（必填）
+   - 選擇預約日期（必填，需為明天之後）
+   - 病歷號和症狀描述（選填）
+3. 點擊「提交預約」完成預約
+
+**方式二：透過 AI 聊天**
+1. 在聊天框中輸入「我要預約」或「我要掛號」
+2. 系統會自動彈出預約表單
+3. 填寫資訊後即可完成預約
+
+**營業時間**
+• 早班：09:00 - 15:00
+• 午班：15:00 - 21:00
+• 預約時間需在營業時間內
+
+**注意事項**
+• 預約日期必須是明天之後的日期
+• 每個科別都有早班和午班兩位醫師可選擇
+• 預約成功後可在「我的預約」頁面查看和管理`,
+
+            'tomorrow-booking': `**預約明天門診**
+
+**預約步驟：**
+1. 點擊右上角「預約門診」按鈕
+2. 在預約日期欄位選擇「明天」的日期
+3. 選擇科別和醫師
+4. 選擇時間（09:00-21:00）
+5. 填寫其他必要資訊
+6. 提交預約
+
+**可預約時段：**
+• **早班時段**：09:00 - 15:00
+• **午班時段**：15:00 - 21:00
+
+**提醒事項：**
+• 預約時間必須在醫師的上班時段內
+• 建議提前預約，確保有合適的時段
+• 預約成功後會收到確認訊息
+• 可在「我的預約」頁面查看預約詳情
+
+**快速預約**
+您也可以直接在聊天框輸入「我要預約明天內科門診」，系統會自動為您開啟預約表單。`,
+
+            'preparation': `**預約需要準備什麼？**
+
+預約門診前，請準備以下資訊：
+
+**必備資訊：**
+1. **病患姓名**：請填寫真實姓名
+2. **聯絡電話**：用於預約確認和通知
+3. **科別**：選擇要就診的科別
+   - 內科、外科、兒科、婦產科、骨科
+   - 眼科、耳鼻喉科、皮膚科、精神科、復健科
+4. **醫師**：選擇該科別的醫師（早班或午班）
+5. **預約日期**：選擇明天之後的日期
+6. **預約時間**：選擇 09:00-21:00 之間的時段
+
+**選填資訊：**
+• **病歷號**：如有病歷號可填寫，無則可留空
+• **症狀描述**：簡述主要症狀，幫助醫師準備
+
+**其他準備事項：**
+• 確認預約日期和時間是否方便
+• 如需取消或修改預約，可在「我的預約」頁面操作
+• 建議提前 10-15 分鐘到達醫院
+• 記得攜帶身份證件和健保卡（如適用）
+
+**注意事項：**
+• 預約時間需在醫師的上班時段內
+• 每個科別有早班（09:00-15:00）和午班（15:00-21:00）可選擇
+• 預約成功後請妥善保存預約資訊`
+        };
+
+        // 預約門診說明按鈕點擊事件
+        document.querySelectorAll('.appointment-info-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const infoType = this.getAttribute('data-info-type');
+                const content = appointmentInfoContent[infoType];
+                if (content) {
+                    // 顯示說明內容到聊天容器
+                    addMessageToChat('assistant', content);
+                }
+            });
+        });
+
+        // 其他範例對話按鈕點擊事件（常見疾病資訊）
+        document.querySelectorAll('.example-btn:not(.appointment-info-btn)').forEach(button => {
             button.addEventListener('click', function() {
                 const exampleText = this.getAttribute('data-example');
                 if (exampleText) {
-                    // 將範例文字填入輸入框
                     textInput.value = exampleText;
-                    // 自動發送消息
                     sendMessage();
                 }
             });
+        });
+
+        // ===== 預約表單彈窗邏輯 =====
+        const appointmentModal = document.getElementById('appointmentModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const cancelModalBtn = document.getElementById('cancelModalBtn');
+        const modalForm = document.getElementById('modalAppointmentForm');
+        const modalDept = document.getElementById('modalDepartment');
+        const modalDoctor = document.getElementById('modalDoctor');
+        const doctorOptions = JSON.parse('{{ doctor_options|tojson|safe }}');
+        const scheduleModal = document.getElementById('scheduleModal');
+        const closeScheduleBtn = document.getElementById('closeScheduleBtn');
+        const scheduleTitle = document.getElementById('scheduleTitle');
+        const scheduleBody = document.getElementById('scheduleBody');
+
+        function openAppointmentModal() {
+            appointmentModal.style.display = 'flex';
+        }
+        function closeAppointmentModal() {
+            appointmentModal.style.display = 'none';
+        }
+
+        function populateModalDoctors(dept, preset) {
+            modalDoctor.innerHTML = '<option value="">' + '請選擇醫師' + '</option>';
+            const list = doctorOptions[dept] || [];
+            list.forEach(item => {
+                const shiftLabel = item.shift === 'morning' ? '早班 09:00-15:00' : '午班 15:00-21:00';
+                const opt = document.createElement('option');
+                opt.value = item.doctor_name;
+                opt.textContent = `${item.doctor_name}（${shiftLabel}）`;
+                if (preset && preset === item.doctor_name) opt.selected = true;
+                modalDoctor.appendChild(opt);
+            });
+        }
+        modalDept.addEventListener('change', (e) => {
+            populateModalDoctors(e.target.value, null);
+        });
+
+        closeModalBtn.addEventListener('click', closeAppointmentModal);
+        cancelModalBtn.addEventListener('click', closeAppointmentModal);
+        appointmentModal.addEventListener('click', (e) => {
+            if (e.target === appointmentModal) closeAppointmentModal();
+        });
+
+        // 時刻表
+        function openScheduleModal(dept) {
+            const list = doctorOptions[dept] || [];
+            scheduleTitle.textContent = `${dept} — 醫師時刻表`;
+            if (!list.length) {
+                scheduleBody.innerHTML = '<p style="color:#666;">目前沒有該科別的醫師資料。</p>';
+            } else {
+                const rows = list.map(item => {
+                    const shiftLabel = item.shift === 'morning' ? '早班 09:00-15:00' : '午班 15:00-21:00';
+                    return `<div style="padding:10px 0; border-bottom:1px solid #eee;">
+                        <div style="font-weight:600;">${item.doctor_name}</div>
+                        <div style="color:#555;">${shiftLabel}</div>
+                    </div>`;
+                }).join('');
+                scheduleBody.innerHTML = rows;
+            }
+            scheduleModal.style.display = 'flex';
+        }
+        function closeScheduleModal() { scheduleModal.style.display = 'none'; }
+        closeScheduleBtn.addEventListener('click', closeScheduleModal);
+        scheduleModal.addEventListener('click', (e) => {
+            if (e.target === scheduleModal) closeScheduleModal();
+        });
+
+        // 設置最小日期（明天）
+        const modalDate = document.getElementById('modalDate');
+        const modalTomorrow = new Date();
+        modalTomorrow.setDate(modalTomorrow.getDate() + 1);
+        modalDate.min = modalTomorrow.toISOString().split('T')[0];
+
+        // 表單提交：直接 POST 到 /appointment，成功後導向預約列表
+        modalForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(modalForm);
+            try {
+                const response = await fetch('/appointment', { method: 'POST', body: formData });
+                if (response.redirected) {
+                    window.location = response.url;
+                    return;
+                }
+                const text = await response.text();
+                if ((response.ok && text.includes('我的預約')) || text.includes('預約記錄')) {
+                    window.location = '/appointment/list';
+                } else {
+                    alert('提交可能失敗，請確認表單或稍後再試');
+                }
+            } catch (err) {
+                console.error('預約提交失敗:', err);
+                alert('預約提交失敗，請稍後再試');
+            }
+        });
+
+        // 快捷鍵：輸入框內 Ctrl/Cmd+Enter 也觸發送出
+        textInput.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
         });
 
         // 頁面載入完成後恢復對話記錄
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', loadChatHistory);
         } else {
-            // DOM 已經載入完成
             loadChatHistory();
         }
     </script>

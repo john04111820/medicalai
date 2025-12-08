@@ -65,6 +65,44 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON medical_appointments(username)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_appointment_date ON medical_appointments(appointment_date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_patient_id ON medical_appointments(patient_id)")
+
+        # 醫師表：每科兩位醫師，早/下午分流
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS doctors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            department VARCHAR(100) NOT NULL,
+            doctor_name VARCHAR(100) NOT NULL,
+            shift VARCHAR(20) NOT NULL, -- morning / afternoon
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL
+        )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_doctor_dept ON doctors(department)")
+
+        doctor_seed = {
+            "內科": [("張內晨", "morning"), ("李內昕", "afternoon")],
+            "外科": [("王外晨", "morning"), ("陳外昕", "afternoon")],
+            "兒科": [("林兒晨", "morning"), ("黃兒昕", "afternoon")],
+            "婦產科": [("周婦晨", "morning"), ("趙婦昕", "afternoon")],
+            "骨科": [("吳骨晨", "morning"), ("鄭骨昕", "afternoon")],
+            "眼科": [("許眼晨", "morning"), ("郭眼昕", "afternoon")],
+            "耳鼻喉科": [("洪耳晨", "morning"), ("邱耳昕", "afternoon")],
+            "皮膚科": [("何膚晨", "morning"), ("柯膚昕", "afternoon")],
+            "精神科": [("施心晨", "morning"), ("簡心昕", "afternoon")],
+            "復健科": [("蔡復晨", "morning"), ("曾復昕", "afternoon")],
+        }
+
+        cursor.execute("SELECT COUNT(*) FROM doctors")
+        doctor_count = cursor.fetchone()[0]
+        if doctor_count == 0:
+            for dept, doctors in doctor_seed.items():
+                for name, shift in doctors:
+                    start, end = ("09:00", "15:00") if shift == "morning" else ("15:00", "21:00")
+                    cursor.execute(
+                        "INSERT INTO doctors (department, doctor_name, shift, start_time, end_time) VALUES (?, ?, ?, ?, ?)",
+                        (dept, name, shift, start, end)
+                    )
+            print("[成功] 預設醫師資料已建立")
         
         conn.commit()
         conn.close()
@@ -81,6 +119,32 @@ def login_required(f):
         if 'user' not in session: return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+
+def get_doctors_by_department():
+    """回傳 {department: [doctor rows]} 的映射。"""
+    conn = get_db_connection()
+    if not conn: return {}
+    try:
+        cursor = conn.execute(
+            "SELECT department, doctor_name, shift, start_time, end_time FROM doctors ORDER BY department, shift"
+        )
+        result = {}
+        for row in cursor.fetchall():
+            dept = row['department']
+            result.setdefault(dept, []).append(dict(row))
+        return result
+    finally:
+        conn.close()
+
+def is_time_in_range(time_str, start="09:00", end="21:00"):
+    """檢查時間是否在營業時間內（含邊界）。格式 HH:MM"""
+    try:
+        t = datetime.strptime(time_str, "%H:%M").time()
+        start_t = datetime.strptime(start, "%H:%M").time()
+        end_t = datetime.strptime(end, "%H:%M").time()
+        return start_t <= t <= end_t
+    except Exception:
+        return False
 
 # === AI 模型設定 ===
 gemini_model = None
@@ -138,7 +202,7 @@ def get_whisper_model():
     if not whisper_model:
         try:
             print("[載入] 正在載入 Whisper 模型...")
-            whisper_model = whisper.load_model("base")
+            whisper_model = whisper.load_model("medium")
             print("[成功] Whisper 模型已載入")
         except Exception as e:
             print(f"[錯誤] Whisper 模型載入失敗: {e}")
@@ -147,7 +211,9 @@ def get_whisper_model():
 users = {"admin": generate_password_hash("1234")}
 
 @app.route("/")
-def index(): return render_template("index.html", username=session.get("user"))
+def index():
+    doctors_map = get_doctors_by_department()
+    return render_template("index.html", username=session.get("user"), doctor_options=doctors_map)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -212,14 +278,22 @@ def logout():
 @login_required
 def appointment():
     min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    doctors_map = get_doctors_by_department()
     if request.method == "POST":
         form = request.form
         conn = get_db_connection()
         if not conn: 
             return render_template("appointment.html", username=session.get("user"), 
-                                 error="無法連線到資料庫", form_data=form, min_date=min_date)
+                                 error="無法連線到資料庫", form_data=form, min_date=min_date, doctor_options=doctors_map)
         
         try:
+            # 檢查時間是否在營業時間 (09:00-21:00)
+            appt_time = form.get("appointment_time", "")
+            if not is_time_in_range(appt_time):
+                return render_template("appointment.html", username=session.get("user"),
+                                     error="預約時間需介於 09:00 至 21:00", form_data=form, min_date=min_date,
+                                     doctor_options=doctors_map)
+
             # SQLite 使用 ? 作為參數佔位符
             sql = """INSERT INTO medical_appointments 
                     (username, patient_id, patient_name, patient_phone, department, doctor_name, 
@@ -245,10 +319,11 @@ def appointment():
         except Exception as e:
             print(f"資料庫寫入錯誤: {e}")
             return render_template("appointment.html", username=session.get("user"), 
-                                 error=f"資料庫錯誤: {str(e)}", form_data=form, min_date=min_date)
+                                 error=f"資料庫錯誤: {str(e)}", form_data=form, min_date=min_date,
+                                 doctor_options=doctors_map)
         finally: 
             conn.close()
-    return render_template("appointment.html", username=session.get("user"), min_date=min_date)
+    return render_template("appointment.html", username=session.get("user"), min_date=min_date, doctor_options=doctors_map)
 
 @app.route("/appointment/list")
 @login_required
@@ -351,6 +426,8 @@ def create_appointment_via_ai(username, appointment_data):
             appointment_datetime = datetime.strptime(f"{appointment_data['appointment_date']} {appointment_data['appointment_time']}", "%Y-%m-%d %H:%M")
             if appointment_datetime < datetime.now():
                 return {"success": False, "error": "預約時間不能是過去時間"}
+            if not is_time_in_range(appointment_data['appointment_time']):
+                return {"success": False, "error": "預約時間需介於 09:00 至 21:00"}
         except ValueError:
             return {"success": False, "error": "日期或時間格式錯誤"}
         
@@ -677,17 +754,139 @@ def chat():
             else:
                 enhanced_message = f"{message}\n\n（目前沒有找到相關的預約記錄）"
         
-        # 調用 Gemini API
-        response = gemini_model.generate_content(enhanced_message)
-        reply = response.text.strip()
-        print(f"[Gemini] 回應: {reply[:100]}...")
-        return jsonify({"success": True, "message": reply})
+        # 常見疾病資訊的本地化回答（當 API 配額用盡時使用）
+        common_diseases_responses = {
+            '感冒': """**感冒的常見症狀：**
+• 流鼻水、鼻塞
+• 打噴嚏
+• 喉嚨痛或咳嗽
+• 輕微發燒（通常低於 38.5°C）
+• 頭痛、身體痠痛
+• 疲勞、食慾不振
 
+**處理方式：**
+• 多休息，保持充足睡眠
+• 多喝溫水，補充水分
+• 可用溫鹽水漱口緩解喉嚨痛
+• 避免接觸冷空氣，注意保暖
+• 症狀嚴重或持續超過一週，建議就醫
+
+**何時需要看醫生：**
+• 高燒超過 38.5°C
+• 症狀持續超過 7-10 天未改善
+• 出現呼吸困難、胸痛等嚴重症狀
+• 兒童、長者或慢性病患者應及早就醫""",
+            '高血壓': """**高血壓注意事項：**
+• 定期測量血壓，記錄數值
+• 遵循醫師指示服藥，不可自行停藥
+• 控制體重，維持健康 BMI
+• 規律運動（每週至少 150 分鐘中等強度運動）
+
+**飲食建議：**
+• 低鈉飲食：每日鹽分攝取少於 6 公克
+• 多攝取蔬果、全穀類
+• 減少加工食品、高脂肪食物
+• 限制酒精攝取
+• 可適量攝取富含鉀的食物（如香蕉、菠菜）
+
+**生活習慣：**
+• 戒菸、避免二手菸
+• 減少壓力，學習放鬆技巧
+• 充足睡眠（7-9 小時）
+• 定期回診追蹤""",
+            '頭痛': """**頭痛可能原因：**
+• 壓力性頭痛（最常見）
+• 偏頭痛
+• 睡眠不足或過度疲勞
+• 脫水
+• 眼睛疲勞
+• 鼻竇炎
+• 頸部肌肉緊繃
+
+**何時需要看醫生：**
+• 突然劇烈頭痛（如雷擊般）
+• 頭痛伴隨發燒、頸部僵硬
+• 頭痛伴隨視力模糊、意識改變
+• 頭痛頻率或強度突然改變
+• 50 歲以上首次出現嚴重頭痛
+• 頭痛影響日常生活超過 3 天
+
+**緩解方式：**
+• 休息、放鬆
+• 適度按摩太陽穴、頸部
+• 冷敷或熱敷
+• 保持充足水分
+• 避免過度使用止痛藥（可能造成反彈性頭痛）""",
+            '胃痛': """**胃痛可能原因：**
+• 消化不良
+• 胃食道逆流
+• 胃炎
+• 壓力或焦慮
+• 飲食不當（過油、過辣、過量）
+
+**緩解方式：**
+• 少量多餐，細嚼慢嚥
+• 避免刺激性食物（咖啡、酒精、辛辣）
+• 飯後不要立即躺下
+• 可適量飲用溫水或薑茶
+• 放鬆心情，減少壓力
+
+**何時需要就醫：**
+• 劇烈疼痛或持續超過數小時
+• 伴隨嘔血、黑便
+• 體重不明原因下降
+• 吞嚥困難
+• 疼痛影響日常生活
+• 症狀反覆發作超過 2 週""",
+        }
+        
+        # 檢查是否為常見疾病問題，如果是且 API 可能配額用盡，使用本地化回答
+        message_lower = message.lower()
+        disease_keywords = {
+            '感冒': ['感冒', '流鼻水', '鼻塞', '打噴嚏', '咳嗽'],
+            '高血壓': ['高血壓', '血壓'],
+            '頭痛': ['頭痛', '頭疼'],
+            '胃痛': ['胃痛', '胃疼', '胃不舒服']
+        }
+        
+        local_response = None
+        for disease, keywords in disease_keywords.items():
+            if any(kw in message_lower for kw in keywords):
+                local_response = common_diseases_responses.get(disease)
+                break
+        
+        # 嘗試調用 Gemini API
+        try:
+            response = gemini_model.generate_content(enhanced_message)
+            reply = response.text.strip()
+            print(f"[Gemini] 回應: {reply[:100]}...")
+            return jsonify({"success": True, "message": reply})
+        except Exception as e:
+            error_str = str(e)
+            # 檢查是否為配額/速率限制錯誤
+            if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower() or "Resource exhausted" in error_str:
+                print(f"[警告] Gemini API 配額/速率限制：{error_str}")
+                # 如果有本地化回答，使用它；否則顯示友善提示
+                if local_response:
+                    return jsonify({"success": True, "message": local_response})
+                else:
+                    friendly_msg = "AI 服務目前配額已用完，請稍後再試。如需預約門診，請點擊右上角「預約門診」按鈕。"
+                    return jsonify({"success": False, "error": friendly_msg}), 429
+            else:
+                # 其他錯誤：如果有本地化回答則使用，否則顯示錯誤
+                print(f"[錯誤] Gemini API 調用失敗: {error_str}")
+                import traceback
+                traceback.print_exc()
+                if local_response:
+                    return jsonify({"success": True, "message": local_response})
+                return jsonify({"success": False, "error": f"AI 服務暫時無法使用：{error_str}"}), 500
+    
     except Exception as e:
-        print(f"[錯誤] Gemini API 調用失敗: {e}")
+        # 處理整個函數的意外錯誤
+        print(f"[錯誤] 聊天 API 發生未預期錯誤: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": f"系統錯誤：{str(e)}"}), 500
 
 @app.route("/api/clear-history", methods=["POST"])
 def clear_history():

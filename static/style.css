@@ -58,12 +58,12 @@ body {
 .main-container {
     display: flex;
     flex-direction: column;
-    max-width: 900px;
+    max-width: 1100px;            /* 對話區拉寬 */
     margin: 0 auto;
-    height: calc(100vh - 100px);
-    padding: 20px;
+    height: calc(100vh - 70px);   /* 增加可用高度 */
+    padding: 24px;
     box-sizing: border-box;
-    gap: 20px;
+    gap: 22px;
 }
 
 /* --- 4. 標題 --- */
@@ -193,17 +193,18 @@ h1 {
 
 /* --- 聊天容器 --- */
 .chat-container {
-    flex: 1;
+    flex: 1.2;                    /* 讓聊天區更占空間 */
+    min-height: 420px;            /* 提高最低高度 */
     overflow-y: auto;
     background-color: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-radius: 15px;
-    padding: 20px;
-    margin-bottom: 10px;
+    padding: 24px;
+    margin-bottom: 12px;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 18px;
 }
 
 .welcome-message {

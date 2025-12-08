@@ -182,9 +182,13 @@
 
                     <div class="form-group">
                         <label>醫師姓名 <span class="required">*</span></label>
-                        <input type="text" name="doctor_name" 
-                               value="{{ form_data.doctor_name if form_data else '' }}"
-                               required placeholder="請輸入醫師姓名">
+                        <select name="doctor_name" id="doctorSelect" required>
+                            <option value="">請先選擇科別</option>
+                            {% if form_data and form_data.doctor_name %}
+                                <option value="{{ form_data.doctor_name }}" selected>{{ form_data.doctor_name }}</option>
+                            {% endif %}
+                        </select>
+                        <small style="color: #6c757d; font-size: 14px;">早班 09:00-15:00／午班 15:00-21:00</small>
                     </div>
                 </div>
 
@@ -196,12 +200,6 @@
                                required min="{{ min_date }}">
                     </div>
 
-                    <div class="form-group">
-                        <label>預約時間 <span class="required">*</span></label>
-                        <input type="time" name="appointment_time" 
-                               value="{{ form_data.appointment_time if form_data else '' }}"
-                               required>
-                    </div>
                 </div>
 
                 <div class="btn-group">
@@ -222,6 +220,35 @@
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         dateInput.min = tomorrow.toISOString().split('T')[0];
+
+        // 醫師選單動態切換
+        const doctorOptions = {{ doctor_options|tojson|safe }};
+        const deptSelect = document.querySelector('select[name="department"]');
+        const doctorSelect = document.getElementById('doctorSelect');
+
+        function populateDoctors(dept, preset) {
+            doctorSelect.innerHTML = '<option value="">請選擇醫師</option>';
+            const list = doctorOptions[dept] || [];
+            list.forEach(item => {
+                const shiftLabel = item.shift === 'morning' ? '早班 09:00-15:00' : '午班 15:00-21:00';
+                const opt = document.createElement('option');
+                opt.value = item.doctor_name;
+                opt.textContent = `${item.doctor_name}（${shiftLabel}）`;
+                if (preset && preset === item.doctor_name) opt.selected = true;
+                doctorSelect.appendChild(opt);
+            });
+        }
+
+        deptSelect.addEventListener('change', (e) => {
+            populateDoctors(e.target.value, null);
+        });
+
+        // 初始帶入舊值
+        const initialDept = deptSelect.value;
+        const initialDoctor = "{{ form_data.doctor_name if form_data else '' }}";
+        if (initialDept) {
+            populateDoctors(initialDept, initialDoctor);
+        }
     </script>
 </body>
 </html>
