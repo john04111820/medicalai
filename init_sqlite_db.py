@@ -27,11 +27,11 @@ cursor = conn.cursor()
 print(f"\n[1] 連接資料庫: {DB_FILE}")
 
 # 創建資料表
-        create_table_sql = """
-        CREATE TABLE IF NOT EXISTS medical_appointments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username VARCHAR(100) NOT NULL,
-            patient_id VARCHAR(50),
+create_table_sql = """
+CREATE TABLE IF NOT EXISTS medical_appointments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username VARCHAR(100) NOT NULL,
+    patient_id VARCHAR(50),
             patient_name VARCHAR(100) NOT NULL,
             patient_phone VARCHAR(20) NOT NULL,
             department VARCHAR(100) NOT NULL,
