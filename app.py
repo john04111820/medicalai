@@ -287,12 +287,12 @@ def appointment():
                                  error="無法連線到資料庫", form_data=form, min_date=min_date, doctor_options=doctors_map)
         
         try:
-            # 檢查時間是否在營業時間 (09:00-21:00)
+            # 檢查時間是否在營業時間 (09:00-21:00) - 已移除限制
             appt_time = form.get("appointment_time", "")
-            if not is_time_in_range(appt_time):
-                return render_template("appointment.html", username=session.get("user"),
-                                     error="預約時間需介於 09:00 至 21:00", form_data=form, min_date=min_date,
-                                     doctor_options=doctors_map)
+            # if not is_time_in_range(appt_time):
+            #     return render_template("appointment.html", username=session.get("user"),
+            #                          error="預約時間需介於 09:00 至 21:00", form_data=form, min_date=min_date,
+            #                          doctor_options=doctors_map)
 
             # SQLite 使用 ? 作為參數佔位符
             sql = """INSERT INTO medical_appointments 
@@ -426,8 +426,8 @@ def create_appointment_via_ai(username, appointment_data):
             appointment_datetime = datetime.strptime(f"{appointment_data['appointment_date']} {appointment_data['appointment_time']}", "%Y-%m-%d %H:%M")
             if appointment_datetime < datetime.now():
                 return {"success": False, "error": "預約時間不能是過去時間"}
-            if not is_time_in_range(appointment_data['appointment_time']):
-                return {"success": False, "error": "預約時間需介於 09:00 至 21:00"}
+            # if not is_time_in_range(appointment_data['appointment_time']):
+            #    return {"success": False, "error": "預約時間需介於 09:00 至 21:00"}
         except ValueError:
             return {"success": False, "error": "日期或時間格式錯誤"}
         
