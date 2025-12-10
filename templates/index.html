@@ -4,26 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>語音助理介面</title>
+    <title>語音助理介面 - 醫資醫院</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 
 <body>
 
+    <!-- === 轉場遮罩 (Reveal) === -->
+    <div id="revealOverlay" class="reveal-overlay"></div>
+
     <!-- === 右上角導覽列 === -->
     <div class="top-right-nav">
         {% if username %}
         <!-- 有登入：顯示名字 + 預約連結 + 登出按鈕 -->
-        <span class="user-welcome">嗨，{{ username }}</span>
-        <a href="/appointment" class="nav-btn"
-            style="background: #28a745; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px;">
-            <i class="fa-solid fa-calendar-plus"></i> 預約門診
+        <!-- 有登入：顯示名字 + 預約連結 + 登出按鈕 -->
+        <a href="/profile" class="nav-btn btn-profile-active" title="查看個人資料">
+            <i class="fa-solid fa-user-circle"></i> <span>{{ username }}</span>
         </a>
-        <a href="/appointment/list" class="nav-btn"
-            style="background: #17a2b8; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; margin-right: 10px;">
-            <i class="fa-solid fa-calendar-check"></i> 我的預約
+        <a href="/appointment" class="nav-btn success">
+            <i class="fa-solid fa-calendar-plus"></i> <span>預約門診</span>
         </a>
+        <a href="/appointment/list" class="nav-btn info">
+            <i class="fa-solid fa-calendar-check"></i> <span>我的預約</span>
+        </a>
+        <button id="modeToggleBtn" class="mode-toggle-btn">
+            <i class="fa-solid fa-person-cane"></i>
+            <span>長輩模式</span>
+        </button>
         <a href="/logout" class="nav-btn logout-btn">登出</a>
         {% else %}
         <!-- 沒登入：顯示登入按鈕，連結指向 /login -->
@@ -85,8 +93,13 @@
         <!-- 聊天消息顯示區域 -->
         <div class="chat-container" id="chatContainer">
             <div class="welcome-message">
-                <i class="fa-solid fa-robot"></i>
-                <p>您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。如需預約門診，請點擊右上角的「預約門診」按鈕。您可以輸入文字或使用語音輸入與我對話。
+                <div class="message-avatar" style="background: var(--primary-color); margin: 0 auto 15px;">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <p style="text-align: center; color: var(--light-text);">
+                    您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。<br>
+                    我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。<br>
+                    如需預約門診，請點擊右上角的「預約門診」按鈕，或直接告訴我您的需求。
                 </p>
             </div>
         </div>
@@ -94,7 +107,7 @@
         <!-- 輸入區域 -->
         <div class="input-container">
             <div class="input-wrapper">
-                <textarea class="text-input" id="textInput" placeholder="請輸入您的問題或點擊麥克風錄音..." rows="2"></textarea>
+                <textarea class="text-input" id="textInput" placeholder="請輸入您的問題或點擊麥克風錄音..." rows="1"></textarea>
                 <div class="input-buttons">
                     <button class="mic-button" id="micButton" title="語音輸入">
                         <i class="fa-solid fa-microphone"></i>
@@ -107,41 +120,41 @@
                     </button>
                 </div>
             </div>
-            <div class="recording-status" id="recordingStatus" style="display: none;">
-                <i class="fa-solid fa-circle"></i>
-                <span>正在錄音中...</span>
+            <div class="recording-status" id="recordingStatus"
+                style="display: none; align-items: center; justify-content: center; gap: 8px; color: var(--danger-color); margin-top: 10px;">
+                <i class="fa-solid fa-circle" style="font-size: 0.8rem;"></i>
+                <span style="font-weight: 500;">正在錄音中...</span>
             </div>
-            <div class="processing-status" id="processingStatus" style="display: none;">
+            <div class="processing-status" id="processingStatus"
+                style="display: none; align-items: center; justify-content: center; gap: 8px; color: var(--primary-color); margin-top: 10px;">
                 <i class="fa-solid fa-spinner fa-spin"></i>
-                <span id="processingText">正在處理...</span>
+                <span id="processingText" style="font-weight: 500;">正在處理...</span>
             </div>
         </div>
     </main>
 
+    <!-- === 長輩模式底部 (大按鈕) === -->
+    <div class="senior-footer">
+        <div id="seniorStatusText" class="senior-status-text">請按按鈕說話</div>
+        <button id="bigMicBtn" class="big-mic-btn">
+            <i class="fa-solid fa-microphone"></i>
+        </button>
+        <div style="font-size: 1.1rem; color: #64748b;">點擊開始 / 停止</div>
+    </div>
+
     <!-- === 預約表單彈窗 === -->
-    <div id="appointmentModal"
-        style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:999; align-items:center; justify-content:center;">
-        <div
-            style="background:white; width:90%; max-width:640px; border-radius:10px; padding:24px; position:relative; max-height:90vh; overflow:auto;">
-            <button id="closeModalBtn"
-                style="position:absolute; right:12px; top:12px; border:none; background:transparent; font-size:18px; cursor:pointer;">✕</button>
-            <h2 style="margin-top:0; color:#5563DE;">快速預約</h2>
+    <div id="appointmentModal" class="modal-overlay">
+        <div class="modal-content">
+            <button id="closeModalBtn" class="modal-close">✕</button>
+            <h2 style="color: var(--primary-color);">快速預約</h2>
             <form id="modalAppointmentForm">
                 <div class="form-group">
                     <label>病歷號（選填）</label>
                     <input type="text" name="patient_id" placeholder="如：P12345">
                 </div>
-                <div class="form-group">
-                    <label>病患姓名 <span class="required" style="color:red">*</span></label>
-                    <input type="text" name="patient_name" required placeholder="請輸入病患姓名">
-                </div>
-                <div class="form-group">
-                    <label>聯絡電話 <span class="required" style="color:red">*</span></label>
-                    <input type="tel" name="patient_phone" required placeholder="請輸入聯絡電話">
-                </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>科別 <span class="required" style="color:red">*</span></label>
+                        <label>科別 <span style="color:red">*</span></label>
                         <select name="department" id="modalDepartment" required>
                             <option value="">請選擇科別</option>
                             <option value="內科">內科</option>
@@ -157,43 +170,36 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>醫師姓名 <span class="required" style="color:red">*</span></label>
+                        <label>醫師姓名 <span style="color:red">*</span></label>
                         <select name="doctor_name" id="modalDoctor" required>
                             <option value="">請先選擇科別</option>
                         </select>
-                        <small style="color:#6c757d;">早班 09:00-15:00／午班 15:00-21:00</small>
+                        <small style="color:var(--light-text);">早班 09:00-15:00／午班 15:00-21:00</small>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>預約日期 <span class="required" style="color:red">*</span></label>
+                        <label>預約日期 <span style="color:red">*</span></label>
                         <input type="date" name="appointment_date" id="modalDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label>預約時間 <span class="required" style="color:red">*</span></label>
-                        <input type="time" name="appointment_time" id="modalTime" required>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>症狀描述（選填）</label>
                     <textarea name="symptoms" rows="3" placeholder="簡述症狀、需求"></textarea>
                 </div>
-                <div class="btn-group" style="margin-top:12px;">
-                    <button type="submit" class="btn btn-primary" style="flex:1;">提交預約</button>
-                    <button type="button" id="cancelModalBtn" class="btn btn-secondary" style="flex:1;">取消</button>
+                <div style="margin-top:20px; display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">提交預約</button>
+                    <button type="button" id="cancelModalBtn" class="btn btn-secondary">取消</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- === 醫師時刻表彈窗 === -->
-    <div id="scheduleModal"
-        style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:999; align-items:center; justify-content:center;">
-        <div
-            style="background:white; width:90%; max-width:520px; border-radius:10px; padding:22px; position:relative; max-height:90vh; overflow:auto;">
-            <button id="closeScheduleBtn"
-                style="position:absolute; right:12px; top:12px; border:none; background:transparent; font-size:18px; cursor:pointer;">✕</button>
-            <h2 id="scheduleTitle" style="margin-top:0; color:#5563DE;">醫師時刻表</h2>
+    <div id="scheduleModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 500px;">
+            <button id="closeScheduleBtn" class="modal-close">✕</button>
+            <h2 id="scheduleTitle" style="color: var(--primary-color);">醫師時刻表</h2>
             <div id="scheduleBody"></div>
         </div>
     </div>
@@ -211,18 +217,14 @@
         let mediaRecorder = null;
         let audioChunks = [];
         let isRecording = false;
-        let isLoadingHistory = false; // 標記是否正在載入歷史記錄
+        let isLoadingHistory = false;
 
-
-        // 檢查瀏覽器是否支持錄音
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             alert('您的瀏覽器不支持錄音功能，請使用 Chrome、Edge 或 Firefox 瀏覽器');
         }
 
-        // 發送消息按鈕事件
         sendButton.addEventListener('click', sendMessage);
 
-        // 按 Enter 發送（Shift+Enter 換行）
         textInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -230,39 +232,48 @@
             }
         });
 
-        // 清除對話歷史
+        // 自動調整輸入框高度
+        textInput.addEventListener('input', function () {
+            this.style.height = 'auto'; // Reset height
+            const newHeight = Math.min(this.scrollHeight, 120);
+            this.style.height = (newHeight > 0 ? newHeight : 45) + 'px';
+        });
+
         clearButton.addEventListener('click', async () => {
             if (confirm('確定要清除所有對話記錄嗎？')) {
                 try {
                     const response = await fetch('/api/clear-history', {
                         method: 'POST'
                     });
-                    const data = await response.json();
-                    if (data.success) {
-                        // 清除 localStorage
-                        localStorage.removeItem('chatHistory');
-                        chatContainer.innerHTML = `
-                            <div class="welcome-message">
-                                <i class="fa-solid fa-robot"></i>
-                                <p>您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。如需預約門診，請點擊右上角的「預約門診」按鈕。您可以輸入文字或使用語音輸入與我對話。</p>
+                    // Client side clear regardless of server support for this specific endpoint in this version
+                    localStorage.removeItem('chatHistory');
+                    chatContainer.innerHTML = `
+                             <div class="welcome-message">
+                                <div class="message-avatar" style="background: var(--primary-color); margin: 0 auto 15px;">
+                                    <i class="fa-solid fa-robot"></i>
+                                </div>
+                                <p style="text-align: center; color: var(--light-text);">
+                                    您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。<br>
+                                    我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。<br>
+                                    如需預約門診，請點擊右上角的「預約門診」按鈕，或直接告訴我您的需求。
+                                </p>
                             </div>
                         `;
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }
                 } catch (error) {
                     console.error('清除對話歷史失敗:', error);
+                    // Fallback clear
+                    localStorage.removeItem('chatHistory');
+                    location.reload();
                 }
             }
         });
 
-        // 頁面載入時恢復對話記錄
         window.addEventListener('DOMContentLoaded', () => {
             loadChatHistory();
         });
 
         micButton.addEventListener('click', async () => {
             if (!isRecording) {
-                // 開始錄音
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     mediaRecorder = new MediaRecorder(stream, {
@@ -278,11 +289,8 @@
                     };
 
                     mediaRecorder.onstop = async () => {
-                        // 錄音結束，處理音頻
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                         await sendAudioToServer(audioBlob);
-
-                        // 停止所有音頻軌道
                         stream.getTracks().forEach(track => track.stop());
                     };
 
@@ -296,7 +304,6 @@
                     alert('無法訪問麥克風，請確認已授予麥克風權限');
                 }
             } else {
-                // 停止錄音
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                 }
@@ -309,8 +316,6 @@
 
         async function sendAudioToServer(audioBlob) {
             try {
-                console.log('開始發送音頻，大小:', audioBlob.size, 'bytes');
-
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'recording.webm');
 
@@ -319,78 +324,64 @@
                     body: formData
                 });
 
-                console.log('收到響應，狀態:', response.status);
-
-                // 檢查響應狀態
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('服務器錯誤:', errorText);
-                    throw new Error(`服務器錯誤: ${response.status} - ${errorText}`);
+                    throw new Error(`服務器錯誤: ${response.status}`);
                 }
 
                 const data = await response.json();
-                console.log('收到數據:', data);
 
                 if (data.success && data.text) {
                     const newText = data.text.trim();
-
                     if (newText) {
-                        // 將轉錄的文字顯示在輸入框中
                         textInput.value = newText;
-                        console.log('語音轉文字成功，文字已填入輸入框');
-                        // 自動發送消息到 Gemini
                         await sendMessage();
                     } else {
-                        console.warn('轉錄結果為空');
                         alert('未能識別到語音內容，請重試');
                     }
                 } else {
-                    const errorMsg = data.error || '未知錯誤';
-                    console.error('轉錄失敗:', errorMsg);
-                    alert('轉錄失敗: ' + errorMsg);
+                    alert('轉錄失敗: ' + (data.error || '未知錯誤'));
                 }
             } catch (error) {
                 console.error('發送音頻時發生錯誤:', error);
-                alert('發送音頻時發生錯誤: ' + error.message + '\n請查看瀏覽器控制台獲取詳細信息');
+                alert('發送音頻時發生錯誤');
             } finally {
                 processingStatus.style.display = 'none';
             }
         }
 
-        // 預約/時刻表 關鍵字偵測
         const createKeywords = ['預約', '掛號', '我要預約', '幫我預約', '預約門診', '我要掛號'];
         const scheduleKeywords = ['時間', '時段', '門診', '上班', '看診', '時刻表'];
 
-        // 發送消息到 Gemini（若判定為預約/時刻表意圖，彈出對應表單）
         async function sendMessage() {
             const message = textInput.value.trim();
             if (!message) return;
 
-            // 檢查是否詢問時刻表
             const deptList = Object.keys(doctorOptions || {});
             const matchedDept = deptList.find(dept => message.includes(dept));
             const isScheduleIntent = matchedDept && scheduleKeywords.some(k => message.includes(k));
+
             if (isScheduleIntent) {
                 openScheduleModal(matchedDept);
+                textInput.value = '';
                 return;
             }
 
             const isCreateIntent = createKeywords.some(k => message.includes(k));
             if (isCreateIntent) {
                 openAppointmentModal();
+                // Optionally keep text or clear it? Clearing for clean UI
+                // textInput.value = ''; 
+                // However, user might have typed partial info. Let's send to chat if modal is separate? 
+                // The original logic opened modal. We stick to that.
                 return;
             }
 
-            // 顯示用戶消息
             addMessageToChat('user', message);
-
-            // 清空輸入框
             textInput.value = '';
+            textInput.style.height = 'auto'; // Reset height
 
-            // 顯示 AI 正在輸入
             const aiMessageElement = addMessageToChat('assistant', '正在思考...', true);
 
-            // 禁用輸入
             textInput.disabled = true;
             sendButton.disabled = true;
             micButton.disabled = true;
@@ -400,32 +391,22 @@
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: message })
                 });
 
                 const data = await response.json();
-
-                // 移除「正在思考...」消息
                 aiMessageElement.remove();
 
                 if (data.success && data.message) {
-                    // 顯示 AI 回應
                     addMessageToChat('assistant', data.message);
                 } else {
-                    const errorMsg = data.error || '未知錯誤';
-                    addMessageToChat('assistant', '抱歉，發生錯誤：' + errorMsg);
-                    console.error('Gemini API 錯誤:', errorMsg);
+                    addMessageToChat('assistant', '抱歉，發生錯誤：' + (data.error || '未知錯誤'));
                 }
             } catch (error) {
-                // 移除「正在思考...」消息
                 aiMessageElement.remove();
                 addMessageToChat('assistant', '抱歉，發送消息時發生錯誤，請重試。');
-                console.error('發送消息錯誤:', error);
             } finally {
-                // 恢復輸入
                 textInput.disabled = false;
                 sendButton.disabled = false;
                 micButton.disabled = false;
@@ -434,16 +415,11 @@
             }
         }
 
-        // 保存對話記錄到 localStorage
         function saveChatHistory() {
-            // 如果正在載入歷史記錄，不保存
-            if (isLoadingHistory) {
-                return;
-            }
+            if (isLoadingHistory) return;
 
             const messages = [];
-            const messageElements = chatContainer.querySelectorAll('.message');
-            messageElements.forEach(msg => {
+            document.querySelectorAll('.message').forEach(msg => {
                 const role = msg.classList.contains('user-message') ? 'user' : 'assistant';
                 const contentElement = msg.querySelector('.message-text');
                 if (contentElement && !contentElement.querySelector('.typing-indicator')) {
@@ -456,48 +432,34 @@
             localStorage.setItem('chatHistory', JSON.stringify(messages));
         }
 
-        // 從 localStorage 載入對話記錄
         function loadChatHistory() {
-            // 檢查頁面上是否已經有消息（除了歡迎消息）
-            const existingMessages = chatContainer.querySelectorAll('.message');
-            if (existingMessages.length > 0) {
-                // 如果已經有消息，不載入（避免重複）
-                return false;
-            }
+            if (document.querySelectorAll('.message').length > 0) return;
 
             try {
-                isLoadingHistory = true; // 設置載入標記
-
+                isLoadingHistory = true;
                 const savedHistory = localStorage.getItem('chatHistory');
                 if (savedHistory) {
                     const messages = JSON.parse(savedHistory);
                     if (messages && messages.length > 0) {
-                        // 移除歡迎消息
                         const welcomeMsg = chatContainer.querySelector('.welcome-message');
-                        if (welcomeMsg) {
-                            welcomeMsg.remove();
-                        }
-                        // 恢復所有消息（不觸發保存）
+                        if (welcomeMsg) welcomeMsg.remove();
+
                         messages.forEach(msg => {
                             addMessageToChat(msg.role, msg.content, false, msg.time, true);
                         });
                         chatContainer.scrollTop = chatContainer.scrollHeight;
-                        return true;
                     }
                 }
             } catch (error) {
                 console.error('載入對話記錄失敗:', error);
             } finally {
-                isLoadingHistory = false; // 清除載入標記
+                isLoadingHistory = false;
             }
-            return false;
         }
 
-        // 添加消息到聊天界面
         function addMessageToChat(role, content, isTyping = false, customTime = null, skipSave = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}-message`;
-
             const messageTime = customTime || getCurrentTime();
 
             if (role === 'user') {
@@ -522,16 +484,12 @@
                 `;
             }
 
-            // 移除歡迎消息（如果存在）
             const welcomeMsg = chatContainer.querySelector('.welcome-message');
-            if (welcomeMsg) {
-                welcomeMsg.remove();
-            }
+            if (welcomeMsg) welcomeMsg.remove();
 
             chatContainer.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            // 如果不是正在輸入的臨時消息，且不是載入歷史記錄時，保存對話記錄
             if (!isTyping && !skipSave && !isLoadingHistory) {
                 saveChatHistory();
             }
@@ -539,117 +497,30 @@
             return messageDiv;
         }
 
-        // HTML 轉義函數
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // 獲取當前時間
         function getCurrentTime() {
-            const now = new Date();
-            return now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+            return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
         }
 
-        // 預約門診說明內容
         const appointmentInfoContent = {
-            'how-to-book': `**如何預約門診？**
-
-預約門診非常簡單，您可以透過以下方式：
-
-**方式一：使用預約表單**
-1. 點擊右上角的「預約門診」按鈕
-2. 填寫完整的預約資訊：
-   - 病患姓名（必填）
-   - 聯絡電話（必填）
-   - 選擇科別（必填）
-   - 選擇醫師（必填）
-   - 選擇預約日期（必填，需為明天之後）
-   - 病歷號和症狀描述（選填）
-3. 點擊「提交預約」完成預約
-
-**方式二：透過 AI 聊天**
-1. 在聊天框中輸入「我要預約」或「我要掛號」
-2. 系統會自動彈出預約表單
-3. 填寫資訊後即可完成預約
-
-**營業時間**
-• 早班：09:00 - 15:00
-• 午班：15:00 - 21:00
-• 預約時間需在營業時間內
-
-**注意事項**
-• 預約日期必須是明天之後的日期
-• 每個科別都有早班和午班兩位醫師可選擇
-• 預約成功後可在「我的預約」頁面查看和管理`,
-
-            'tomorrow-booking': `**預約明天門診**
-
-**預約步驟：**
-1. 點擊右上角「預約門診」按鈕
-2. 在預約日期欄位選擇「明天」的日期
-3. 選擇科別和醫師
-4. 選擇時間（09:00-21:00）
-5. 填寫其他必要資訊
-6. 提交預約
-
-**可預約時段：**
-• **早班時段**：09:00 - 15:00
-• **午班時段**：15:00 - 21:00
-
-**提醒事項：**
-• 預約時間必須在醫師的上班時段內
-• 建議提前預約，確保有合適的時段
-• 預約成功後會收到確認訊息
-• 可在「我的預約」頁面查看預約詳情
-
-**快速預約**
-您也可以直接在聊天框輸入「我要預約明天內科門診」，系統會自動為您開啟預約表單。`,
-
-            'preparation': `**預約需要準備什麼？**
-
-預約門診前，請準備以下資訊：
-
-**必備資訊：**
-1. **病患姓名**：請填寫真實姓名
-2. **聯絡電話**：用於預約確認和通知
-3. **科別**：選擇要就診的科別
-   - 內科、外科、兒科、婦產科、骨科
-   - 眼科、耳鼻喉科、皮膚科、精神科、復健科
-4. **醫師**：選擇該科別的醫師（早班或午班）
-5. **預約日期**：選擇明天之後的日期
-6. **預約時間**：選擇 09:00-21:00 之間的時段
-
-**選填資訊：**
-• **病歷號**：如有病歷號可填寫，無則可留空
-• **症狀描述**：簡述主要症狀，幫助醫師準備
-
-**其他準備事項：**
-• 確認預約日期和時間是否方便
-• 如需取消或修改預約，可在「我的預約」頁面操作
-• 建議提前 10-15 分鐘到達醫院
-• 記得攜帶身份證件和健保卡（如適用）
-
-**注意事項：**
-• 預約時間需在醫師的上班時段內
-• 每個科別有早班（09:00-15:00）和午班（15:00-21:00）可選擇
-• 預約成功後請妥善保存預約資訊`
+            'how-to-book': `**如何預約門診？**\n\n預約門診非常簡單，您可以透過以下方式：\n\n**方式一：使用預約表單**\n1. 點擊右上角的「預約門診」按鈕\n2. 填寫完整的預約資訊\n3. 點擊「提交預約」完成預約\n\n**方式二：透過 AI 聊天**\n在聊天框中輸入「我要預約」，系統會自動彈出表單。`,
+            'tomorrow-booking': `**預約明天門診**\n\n請輸入「預約明天」，或點擊右上角按鈕選擇明天的日期。\n\n**營業時間**\n• 早班：09:00 - 15:00\n• 午班：15:00 - 21:00`,
+            'preparation': `**預約需要準備什麼？**\n\n1. **病患姓名**\n2. **聯絡電話**\n3. **想要看的科別與醫師**\n4. **預約日期與時間**`
         };
 
-        // 預約門診說明按鈕點擊事件
         document.querySelectorAll('.appointment-info-btn').forEach(button => {
             button.addEventListener('click', function () {
                 const infoType = this.getAttribute('data-info-type');
                 const content = appointmentInfoContent[infoType];
-                if (content) {
-                    // 顯示說明內容到聊天容器
-                    addMessageToChat('assistant', content);
-                }
+                if (content) addMessageToChat('assistant', content);
             });
         });
 
-        // 其他範例對話按鈕點擊事件（常見疾病資訊）
         document.querySelectorAll('.example-btn:not(.appointment-info-btn)').forEach(button => {
             button.addEventListener('click', function () {
                 const exampleText = this.getAttribute('data-example');
@@ -673,12 +544,8 @@
         const scheduleTitle = document.getElementById('scheduleTitle');
         const scheduleBody = document.getElementById('scheduleBody');
 
-        function openAppointmentModal() {
-            appointmentModal.style.display = 'flex';
-        }
-        function closeAppointmentModal() {
-            appointmentModal.style.display = 'none';
-        }
+        function openAppointmentModal() { appointmentModal.style.display = 'flex'; }
+        function closeAppointmentModal() { appointmentModal.style.display = 'none'; }
 
         function populateModalDoctors(dept, preset) {
             modalDoctor.innerHTML = '<option value="">' + '請選擇醫師' + '</option>';
@@ -692,9 +559,7 @@
                 modalDoctor.appendChild(opt);
             });
         }
-        modalDept.addEventListener('change', (e) => {
-            populateModalDoctors(e.target.value, null);
-        });
+        modalDept.addEventListener('change', (e) => { populateModalDoctors(e.target.value, null); });
 
         closeModalBtn.addEventListener('click', closeAppointmentModal);
         cancelModalBtn.addEventListener('click', closeAppointmentModal);
@@ -702,7 +567,6 @@
             if (e.target === appointmentModal) closeAppointmentModal();
         });
 
-        // 時刻表
         function openScheduleModal(dept) {
             const list = doctorOptions[dept] || [];
             scheduleTitle.textContent = `${dept} — 醫師時刻表`;
@@ -726,13 +590,11 @@
             if (e.target === scheduleModal) closeScheduleModal();
         });
 
-        // 設置最小日期（明天）
         const modalDate = document.getElementById('modalDate');
         const modalTomorrow = new Date();
         modalTomorrow.setDate(modalTomorrow.getDate() + 1);
         modalDate.min = modalTomorrow.toISOString().split('T')[0];
 
-        // 表單提交：直接 POST 到 /appointment，成功後導向預約列表
         modalForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(modalForm);
@@ -743,9 +605,11 @@
                     return;
                 }
                 const text = await response.text();
-                if ((response.ok && text.includes('我的預約')) || text.includes('預約記錄')) {
+                // 簡單檢查返回內容是否包含成功訊息
+                if (text.includes('我的預約') || text.includes('預約成功')) {
                     window.location = '/appointment/list';
                 } else {
+                    // 如果還是返回 html (可能是有錯誤訊息), 從 text 中抓取 error
                     alert('提交可能失敗，請確認表單或稍後再試');
                 }
             } catch (err) {
@@ -754,7 +618,31 @@
             }
         });
 
-        // 快捷鍵：輸入框內 Ctrl/Cmd+Enter 也觸發送出
+        // === 轉場效果邏輯 (Reveal) ===
+        // 檢查 URL 參數 transition=from_splash
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('transition') === 'from_splash') {
+            const revealOverlay = document.getElementById('revealOverlay');
+            // 確保一開始是白色的 (CSS 已預設 opacity: 0, 但我們需要 override 為 1 初始狀態,
+            // 或是在 CSS 中將 active class 設為 opacity: 0? 
+            // 更好的做法：若有參數，預設 display block 且 opacity 1, 然後 remove active 或 fade out
+
+            // 為了避免閃爍，我們強制設為 active (opacity: 1)
+            revealOverlay.classList.add('active');
+
+            // 稍微延遲後 fade out
+            setTimeout(() => {
+                requestAnimationFrame(() => {
+                    revealOverlay.classList.remove('active');
+                });
+            }, 100); // 短暫停留白色
+
+            // 動畫結束後移除 DOM 以防擋住
+            setTimeout(() => {
+                revealOverlay.style.display = 'none';
+            }, 1600);
+        }
+
         textInput.addEventListener('keydown', (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -762,14 +650,55 @@
             }
         });
 
-        // 頁面載入完成後恢復對話記錄
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadChatHistory);
-        } else {
-            loadChatHistory();
-        }
-    </script>
+        // === 長輩模式邏輯 ===
+        const modeToggleBtn = document.getElementById('modeToggleBtn');
+        const bigMicBtn = document.getElementById('bigMicBtn');
+        const seniorStatusText = document.getElementById('seniorStatusText');
+        const bodyElement = document.body;
+        let isSeniorMode = false;
 
+        modeToggleBtn.addEventListener('click', () => {
+            isSeniorMode = !isSeniorMode;
+            if (isSeniorMode) {
+                bodyElement.classList.add('senior-mode');
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-mobile-screen"></i> <span>一般模式</span>';
+                // 進入長輩模式時，送出歡迎語音（模擬）或文字
+                addMessageToChat('assistant', '您好！我是您的語音小幫手。\n請問今天有什麼我可以幫您的？');
+            } else {
+                bodyElement.classList.remove('senior-mode');
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-person-cane"></i> <span>長輩模式</span>';
+            }
+        });
+
+        // 大麥克風按鈕邏輯 (複用現有錄音邏輯)
+        bigMicBtn.addEventListener('click', () => {
+            // 觸發原本的 micButton 點擊事件
+            micButton.click();
+        });
+
+        // 監聽錄音狀態改變 UI (透過 MutationObserver 或簡單的輪詢/Hook，這裡用簡單 Hook)
+        // 由於 micButton 邏輯是封閉的，我們可以在 micButton click 時同步更新 UI，但更好的是監聽 class 變化
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    const isRec = micButton.classList.contains('recording');
+                    if (isRec) {
+                        bigMicBtn.classList.add('listening');
+                        bigMicBtn.innerHTML = '<i class="fa-solid fa-square"></i>'; // 停止圖示
+                        seniorStatusText.textContent = "正在聽您說話...";
+                        seniorStatusText.classList.add('listening-text');
+                    } else {
+                        bigMicBtn.classList.remove('listening');
+                        bigMicBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                        seniorStatusText.textContent = "請按按鈕說話";
+                        seniorStatusText.classList.remove('listening-text');
+                    }
+                }
+            });
+        });
+        observer.observe(micButton, { attributes: true });
+
+    </script>
 </body>
 
 </html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人資料 - 醫資醫院</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .profile-card {
+            background: white;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 600px;
+            margin: 40px auto;
+            position: relative;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .profile-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #3a47c0 100%);
+            padding: 50px 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .profile-avatar {
+            width: 110px;
+            height: 110px;
+            background: white;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3.5rem;
+            color: var(--primary-color);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            border: 4px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .profile-name {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            letter-spacing: 0.5px;
+        }
+
+        .profile-username {
+            font-size: 1rem;
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .profile-body {
+            padding: 40px;
+        }
+
+        .info-group {
+            margin-bottom: 25px;
+            padding: 15px;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .info-group:hover {
+            background: #f8f9fa;
+            transform: translateX(5px);
+        }
+
+        .info-icon {
+            width: 45px;
+            height: 45px;
+            background: #eef1f7;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .info-content {
+            flex: 1;
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: var(--light-text);
+            margin-bottom: 4px;
+            display: block;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .info-value {
+            font-size: 1.2rem;
+            color: var(--dark-text);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .edit-form .form-group {
+            margin-bottom: 25px;
+        }
+
+        .edit-form input {
+            padding: 14px 18px;
+            font-size: 1.05rem;
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+        }
+
+        .edit-form input:focus {
+            background: white;
+            border-color: var(--primary-color);
+        }
+
+        .edit-form {
+            display: none;
+            padding: 10px;
+        }
+
+        body.editing .view-mode {
+            display: none;
+        }
+
+        body.editing .edit-form {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        .btn-profile-edit {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 15px rgba(85, 99, 222, 0.3);
+        }
+
+        .btn-profile-edit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(85, 99, 222, 0.4);
+            background: var(--primary-hover);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- === 右上角導覽列 === -->
+    <div class="top-right-nav">
+        {% if username %}
+        <a href="/profile" class="nav-btn btn-profile-active" title="查看個人資料">
+            <i class="fa-solid fa-user-circle"></i> <span>{{ username }}</span>
+        </a>
+        <a href="/home" class="nav-btn home-btn">
+            <i class="fa-solid fa-house"></i> <span>回首頁</span>
+        </a>
+        <a href="/appointment/list" class="nav-btn info">
+            <i class="fa-solid fa-calendar-check"></i> <span>我的預約</span>
+        </a>
+        <a href="/logout" class="nav-btn logout-btn">登出</a>
+        {% endif %}
+    </div>
+
+    <!-- === 左上角 Logo === -->
+    <a href="/home" class="logo-container" title="返回首頁">
+        <i class="fa-solid fa-hospital"></i>
+        <span>醫資醫院</span>
+    </a>
+
+    <div class="page-container">
+
+        {% if error %}
+        <div
+            style="background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center; border: 1px solid #f5c6cb;">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        {% if message %}
+        <div
+            style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: center; border: 1px solid #c3e6cb;">
+            <i class="fa-solid fa-circle-check"></i> {{ message }}
+        </div>
+        {% endif %}
+
+        <div class="profile-card">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <!-- More profile content here, this replace corrects the bottom structure -->
+                <div class="profile-name">{{ user.name }}</div>
+                <div class="profile-username">@{{ user.username }}</div>
+            </div>
+
+            <div class="profile-body">
+
+                <!-- View Mode -->
+                <div class="view-mode">
+                    <div class="info-group">
+                        <div class="info-icon"><i class="fa-solid fa-signature"></i></div>
+                        <div class="info-content">
+                            <label class="info-label">姓名</label>
+                            <div class="info-value">{{ user.name }}</div>
+                        </div>
+                    </div>
+                    <div class="info-group">
+                        <div class="info-icon"><i class="fa-solid fa-phone"></i></div>
+                        <div class="info-content">
+                            <label class="info-label">聯絡電話</label>
+                            <div class="info-value">{{ user.phone }}</div>
+                        </div>
+                    </div>
+                    <div class="info-group">
+                        <div class="info-icon"><i class="fa-solid fa-id-card"></i></div>
+                        <div class="info-content">
+                            <label class="info-label">身分證字號</label>
+                            <div class="info-value" style="font-family: monospace;">{{ masked_id }}</div>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button onclick="toggleEdit()" class="btn btn-profile-edit">
+                            <i class="fa-solid fa-pen-to-square"></i> 編輯資料
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Edit Mode -->
+                <form method="POST" class="edit-form">
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-signature"></i> 姓名</label>
+                        <input type="text" name="name" value="{{ user.name }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-phone"></i> 聯絡電話</label>
+                        <input type="tel" name="phone" value="{{ user.phone }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fa-solid fa-id-card"></i> 身分證字號</label>
+                        <input type="text" name="identity_id" value="{{ user.identity_id }}" required>
+                        <small style="color: #666; margin-top: 5px; display: block;">
+                            <i class="fa-solid fa-circle-info"></i> 請輸入完整身分證字號以進行驗證
+                        </small>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-success" style="padding: 12px 30px; border-radius: 50px;">
+                            <i class="fa-solid fa-save"></i> 儲存變更
+                        </button>
+                        <button type="button" onclick="toggleEdit()" class="btn btn-secondary"
+                            style="padding: 12px 30px; border-radius: 50px;">
+                            取消
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleEdit() {
+            document.body.classList.toggle('editing');
+        }
+    </script>
+</body>
+
+</html>
