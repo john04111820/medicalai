@@ -355,10 +355,45 @@
             font-size: 0.625rem;
             color: #334155;
         }
+
+        .whiteout-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 1.5s ease-in;
+            z-index: 9999;
+        }
+
+        .storm-flake {
+            position: fixed;
+            top: -20px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.8;
+            pointer-events: none;
+            z-index: 9000;
+        }
+
+        @keyframes storm-fall {
+            0% {
+                transform: translateY(0) translateX(0) rotate(0deg);
+            }
+
+            100% {
+                transform: translateY(120vh) translateX(-50px) rotate(360deg);
+            }
+        }
     </style>
 </head>
 
 <body>
+    <div id="whiteoutOverlay" class="whiteout-overlay"></div>
+    <div id="stormContainer"></div>
 
     <!-- 背景漸層 -->
     <div class="bg-gradient"></div>
@@ -407,11 +442,11 @@
         </div>
 
         <!-- 啟動按鈕 -->
-        <a href="/home" class="start-btn">
-            <span class="btn-content">
-                <span>開始諮詢</span>
-                <i class="fa-solid fa-stethoscope btn-icon"></i>
-            </span>
+        <a href="javascript:void(0)" onclick="startConsultation()" class="start-btn">
+            <span>開始諮詢</span>
+            <div class="icon-circle">
+                <i class="fa-solid fa-arrow-right"></i>
+            </div>
             <div class="btn-scan"></div>
         </a>
 
@@ -450,6 +485,34 @@
                 container.appendChild(flake);
             }
         });
+
+        function startConsultation() {
+            // 1. Start Storm
+            const stormContainer = document.getElementById('stormContainer');
+            const whiteoutOverlay = document.getElementById('whiteoutOverlay');
+
+            // Create 100 fast storm flakes
+            for (let i = 0; i < 100; i++) {
+                const flake = document.createElement('div');
+                flake.className = 'storm-flake';
+                flake.style.left = Math.random() * 100 + 'vw';
+                flake.style.width = (Math.random() * 5 + 3) + 'px';
+                flake.style.height = flake.style.width;
+                flake.style.animation = `storm-fall ${Math.random() * 0.5 + 0.5}s linear infinite`;
+                flake.style.animationDelay = Math.random() * 0.5 + 's';
+                stormContainer.appendChild(flake);
+            }
+
+            // 2. Start Whiteout after short delay
+            setTimeout(() => {
+                whiteoutOverlay.style.opacity = '1';
+            }, 500);
+
+            // 3. Redirect when whiteout is mostly done
+            setTimeout(() => {
+                window.location.href = '/home?transition=from_splash';
+            }, 1800);
+        }
     </script>
 </body>
 

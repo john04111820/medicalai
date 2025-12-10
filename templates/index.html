@@ -11,6 +11,9 @@
 
 <body>
 
+    <!-- === 轉場遮罩 (Reveal) === -->
+    <div id="revealOverlay" class="reveal-overlay"></div>
+
     <!-- === 右上角導覽列 === -->
     <div class="top-right-nav">
         {% if username %}
@@ -623,6 +626,31 @@
                 alert('預約提交失敗，請稍後再試');
             }
         });
+
+        // === 轉場效果邏輯 (Reveal) ===
+        // 檢查 URL 參數 transition=from_splash
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('transition') === 'from_splash') {
+            const revealOverlay = document.getElementById('revealOverlay');
+            // 確保一開始是白色的 (CSS 已預設 opacity: 0, 但我們需要 override 為 1 初始狀態,
+            // 或是在 CSS 中將 active class 設為 opacity: 0? 
+            // 更好的做法：若有參數，預設 display block 且 opacity 1, 然後 remove active 或 fade out
+
+            // 為了避免閃爍，我們強制設為 active (opacity: 1)
+            revealOverlay.classList.add('active');
+
+            // 稍微延遲後 fade out
+            setTimeout(() => {
+                requestAnimationFrame(() => {
+                    revealOverlay.classList.remove('active');
+                });
+            }, 100); // 短暫停留白色
+
+            // 動畫結束後移除 DOM 以防擋住
+            setTimeout(() => {
+                revealOverlay.style.display = 'none';
+            }, 1600);
+        }
 
         textInput.addEventListener('keydown', (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {

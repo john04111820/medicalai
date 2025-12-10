@@ -871,3 +871,18 @@ body.senior-mode {
     font-size: 1.2rem;
     padding: 12px 24px;
 }
+/* === Transition Overlay (Reveal) === */
+.reveal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: white;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0; /* Default invisible */
+    transition: opacity 1.5s ease-out;
+}
+
+.reveal-overlay.active {
+    opacity: 1;
+}
+
