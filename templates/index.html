@@ -22,6 +22,10 @@
         <a href="/appointment/list" class="nav-btn info">
             <i class="fa-solid fa-calendar-check"></i> <span>我的預約</span>
         </a>
+        <button id="modeToggleBtn" class="mode-toggle-btn">
+            <i class="fa-solid fa-person-cane"></i>
+            <span>長輩模式</span>
+        </button>
         <a href="/logout" class="nav-btn logout-btn">登出</a>
         {% else %}
         <!-- 沒登入：顯示登入按鈕，連結指向 /login -->
@@ -122,6 +126,15 @@
             </div>
         </div>
     </main>
+
+    <!-- === 長輩模式底部 (大按鈕) === -->
+    <div class="senior-footer">
+        <div id="seniorStatusText" class="senior-status-text">請按按鈕說話</div>
+        <button id="bigMicBtn" class="big-mic-btn">
+            <i class="fa-solid fa-microphone"></i>
+        </button>
+        <div style="font-size: 1.1rem; color: #64748b;">點擊開始 / 停止</div>
+    </div>
 
     <!-- === 預約表單彈窗 === -->
     <div id="appointmentModal" class="modal-overlay">
@@ -617,6 +630,55 @@
                 sendMessage();
             }
         });
+
+        // === 長輩模式邏輯 ===
+        const modeToggleBtn = document.getElementById('modeToggleBtn');
+        const bigMicBtn = document.getElementById('bigMicBtn');
+        const seniorStatusText = document.getElementById('seniorStatusText');
+        const bodyElement = document.body;
+        let isSeniorMode = false;
+
+        modeToggleBtn.addEventListener('click', () => {
+            isSeniorMode = !isSeniorMode;
+            if (isSeniorMode) {
+                bodyElement.classList.add('senior-mode');
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-mobile-screen"></i> <span>一般模式</span>';
+                // 進入長輩模式時，送出歡迎語音（模擬）或文字
+                addMessageToChat('assistant', '您好！我是您的語音小幫手。\n請問今天有什麼我可以幫您的？');
+            } else {
+                bodyElement.classList.remove('senior-mode');
+                modeToggleBtn.innerHTML = '<i class="fa-solid fa-person-cane"></i> <span>長輩模式</span>';
+            }
+        });
+
+        // 大麥克風按鈕邏輯 (複用現有錄音邏輯)
+        bigMicBtn.addEventListener('click', () => {
+            // 觸發原本的 micButton 點擊事件
+            micButton.click();
+        });
+
+        // 監聽錄音狀態改變 UI (透過 MutationObserver 或簡單的輪詢/Hook，這裡用簡單 Hook)
+        // 由於 micButton 邏輯是封閉的，我們可以在 micButton click 時同步更新 UI，但更好的是監聽 class 變化
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    const isRec = micButton.classList.contains('recording');
+                    if (isRec) {
+                        bigMicBtn.classList.add('listening');
+                        bigMicBtn.innerHTML = '<i class="fa-solid fa-square"></i>'; // 停止圖示
+                        seniorStatusText.textContent = "正在聽您說話...";
+                        seniorStatusText.classList.add('listening-text');
+                    } else {
+                        bigMicBtn.classList.remove('listening');
+                        bigMicBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+                        seniorStatusText.textContent = "請按按鈕說話";
+                        seniorStatusText.classList.remove('listening-text');
+                    }
+                }
+            });
+        });
+        observer.observe(micButton, { attributes: true });
+
     </script>
 </body>
 

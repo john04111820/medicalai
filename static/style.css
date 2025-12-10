@@ -586,7 +586,7 @@ h2 {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
+    z-index: 2000;
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(2px);
@@ -668,4 +668,206 @@ h2 {
         padding: 12px 10px;
         font-size: 0.9rem;
     }
+}
+
+/* === Senior Friendly Mode === */
+.senior-mode {
+    --bg-color: #FFF8E7;
+    --primary-color: #0f766e;
+    --secondary-color: #d97706;
+    /* Warm amber for user msg */
+    --info-color: #0d9488;
+    --dark-text: #1e293b;
+    --base-font-size: 1.5rem;
+    /* Larger base font */
+}
+
+/* Senior Mode Form Overrides */
+.senior-mode input,
+.senior-mode select,
+.senior-mode textarea,
+.senior-mode .btn {
+    font-size: 1.3rem !important;
+    /* Force larger inputs */
+    padding: 15px;
+    /* Larger touch targets */
+}
+
+.senior-mode .modal-content {
+    background: #FFF8E7;
+    /* Match theme */
+    border: 2px solid #0f766e;
+}
+
+body.senior-mode {
+    font-size: var(--base-font-size);
+}
+
+.senior-mode .main-container {
+    max-width: 100%;
+    margin-top: 100px;
+    padding-bottom: 250px;
+    /* Space for large footer */
+}
+
+/* Header Adjustments */
+.senior-mode .top-right-nav {
+    top: 30px;
+}
+
+.senior-mode .logo-container {
+    font-size: 2rem;
+}
+
+/* Chat Bubbles in Senior Mode */
+.senior-mode .chat-container {
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    height: auto;
+    overflow: visible;
+    /* Let body scroll handle it */
+}
+
+.senior-mode .message-text {
+    font-size: 1.5rem;
+    padding: 20px 30px;
+    border-radius: 30px;
+    line-height: 1.6;
+}
+
+.senior-mode .assistant-message .message-text {
+    background: #ffffff;
+    border: 2px solid #0f766e;
+    color: #1e293b;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.senior-mode .user-message .message-text {
+    background: #0f766e;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.senior-mode .message-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 1.8rem;
+}
+
+/* Senior Footer (Big Mic) */
+.senior-footer {
+    display: none;
+    /* Hidden by default */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: rgba(255, 248, 231, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 2px solid #ccfbf1;
+    border-radius: 50px 50px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    height: 300px;
+}
+
+.senior-mode .senior-footer {
+    display: flex;
+    /* Show in senior mode */
+}
+
+.senior-mode .input-container {
+    /* Hide normal input */
+    display: none;
+}
+
+.senior-mode .example-bar {
+    /* Hide examples to simplify */
+    display: none;
+}
+
+.senior-mode h1 {
+    display: none;
+    /* Hide header title to simplify */
+}
+
+/* Big Mic Button */
+.big-mic-btn {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: none;
+    background: #0f766e;
+    color: white;
+    font-size: 4rem;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(15, 118, 110, 0.4);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.big-mic-btn:active {
+    transform: scale(0.95);
+}
+
+.big-mic-btn.listening {
+    background: #ef4444;
+    animation: bigPulse 1.5s infinite;
+}
+
+@keyframes bigPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 30px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+.senior-status-text {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #475569;
+}
+
+.listening-text {
+    color: #ef4444;
+}
+
+/* Toggle Button */
+.mode-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: #e2e8f0;
+    border: none;
+    color: #475569;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    margin-right: 15px;
+    /* Spacing in nav */
+}
+
+.senior-mode .mode-toggle-btn {
+    background: #0f766e;
+    color: white;
+    font-size: 1.2rem;
+    padding: 12px 24px;
 }
