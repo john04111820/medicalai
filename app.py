@@ -60,6 +60,19 @@ def init_db():
         )
         """
         cursor.execute(create_table_sql)
+
+        # 建立使用者資料表
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(100) NOT NULL,
+            phone VARCHAR(20) NOT NULL,
+            identity_id VARCHAR(20) NOT NULL UNIQUE,
+            username VARCHAR(50) NOT NULL UNIQUE,
+            password_hash VARCHAR(200) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
         
         # 建立索引以加速查詢
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON medical_appointments(username)")
@@ -202,13 +215,13 @@ def get_whisper_model():
     if not whisper_model:
         try:
             print("[載入] 正在載入 Whisper 模型...")
-            whisper_model = whisper.load_model("medium")
+            whisper_model = whisper.load_model("base")
             print("[成功] Whisper 模型已載入")
         except Exception as e:
             print(f"[錯誤] Whisper 模型載入失敗: {e}")
     return whisper_model
 
-users = {"admin": generate_password_hash("1234")}
+
 
 @app.route("/")
 def welcome():
@@ -256,8 +269,7 @@ def edit_appointment(apt_id):
         form = request.form
         
         # 簡單驗證
-        if not all([form.get("patient_name"), form.get("patient_phone"), form.get("department"), 
-                    form.get("doctor_name"), form.get("appointment_date"), form.get("appointment_time")]):
+        if not all([form.get("department"), form.get("doctor_name"), form.get("appointment_date")]):
              conn.close()
              return render_template("appointment.html", 
                                   username=session.get('user'), 
@@ -269,6 +281,10 @@ def edit_appointment(apt_id):
                                   apt_id=apt_id)
 
         try:
+             # Use existing values if not in form
+             p_name = form.get("patient_name") or apt["patient_name"]
+             p_phone = form.get("patient_phone") or apt["patient_phone"]
+
              conn.execute("""
                 UPDATE medical_appointments 
                 SET patient_id=?, patient_name=?, patient_phone=?, department=?, 
@@ -276,12 +292,12 @@ def edit_appointment(apt_id):
                 WHERE id=?
             """, (
                 form.get("patient_id"),
-                form.get("patient_name"),
-                form.get("patient_phone"),
+                p_name,
+                p_phone,
                 form.get("department"),
                 form.get("doctor_name"),
                 form.get("appointment_date"),
-                form.get("appointment_time"),
+                form.get("appointment_time", "09:00"),
                 form.get("symptoms"),
                 apt_id
             ))
@@ -310,6 +326,64 @@ def edit_appointment(apt_id):
                          apt_id=apt_id)
 
 
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    """使用者個人資料頁"""
+    conn = get_db_connection()
+    username = session.get("user")
+    
+    if request.method == "POST":
+        try:
+            name = request.form["name"]
+            phone = request.form["phone"]
+            identity_id = request.form["identity_id"]
+            
+            # 更新資料
+            conn.execute(
+                "UPDATE users SET name = ?, phone = ?, identity_id = ? WHERE username = ?",
+                (name, phone, identity_id, username)
+            )
+            conn.commit()
+            
+            return render_template("profile.html", 
+                                 user={"name": name, "phone": phone, "identity_id": identity_id, "username": username},
+                                 masked_id=mask_identity_id(identity_id),
+                                 message="資料更新成功！",
+                                 username=username)
+        except Exception as e:
+            conn.close()
+            err_msg = "更新失敗"
+            if "UNIQUE constraint failed" in str(e):
+                if "identity_id" in str(e):
+                    err_msg = "身分證字號已被使用"
+                
+            return render_template("profile.html", 
+                                 user={"name": name, "phone": phone, "identity_id": identity_id, "username": username},
+                                 masked_id=mask_identity_id(identity_id),
+                                 error=err_msg,
+                                 username=username)
+
+    # GET
+    user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    conn.close()
+    
+    if not user:
+        return redirect(url_for('logout'))
+        
+    user_dict = dict(user)
+    masked_id = mask_identity_id(user_dict['identity_id'])
+    
+    return render_template("profile.html", user=user_dict, masked_id=masked_id, username=username)
+
+def mask_identity_id(id_str):
+    """將身分證字號中間遮蔽，顯示前3後3"""
+    if not id_str or len(id_str) < 7:
+        return id_str
+    # 顯示前3碼 + *** + 後3碼
+    # 例如 A123456789 -> A12***789
+    return f"{id_str[:3]}{'*' * (len(id_str)-6)}{id_str[-3:]}"
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """登入頁，使用 templates/login.html。"""
@@ -317,7 +391,12 @@ def login():
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
-        if username in users and check_password_hash(users[username], password):
+        
+        conn = get_db_connection()
+        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        conn.close()
+
+        if user and check_password_hash(user['password_hash'], password):
             session["user"] = username
             return redirect(url_for("index"))
         msg = "帳號或密碼錯誤"
@@ -328,13 +407,33 @@ def register():
     """註冊頁，使用 templates/register.html。"""
     msg = ""
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        if username in users:
-            msg = "帳號已存在"
-        else:
-            users[username] = generate_password_hash(password)
-            msg = "註冊成功！請登入"
+        try:
+            name = request.form["name"]
+            phone = request.form["phone"]
+            identity_id = request.form["identity_id"]
+            username = request.form["username"]
+            password = request.form["password"]
+            
+            conn = get_db_connection()
+            # 檢查帳號是否已存在
+            user = conn.execute('SELECT id FROM users WHERE username = ? OR identity_id = ?', (username, identity_id)).fetchone()
+            
+            if user:
+                msg = "帳號或身分證字號已存在"
+            else:
+                hashed_password = generate_password_hash(password)
+                conn.execute(
+                    'INSERT INTO users (name, phone, identity_id, username, password_hash) VALUES (?, ?, ?, ?, ?)',
+                    (name, phone, identity_id, username, hashed_password)
+                )
+                conn.commit()
+                msg = "註冊成功！請登入"
+            conn.close()
+        except Exception as e:
+            print(f"註冊錯誤: {e}")
+            msg = "註冊發生錯誤，請稍後再試"
+            if "UNIQUE" in str(e):
+                msg = "帳號或身分證字號已被使用"
     return render_template("register.html", message=msg)
 
 @app.route("/logout")
@@ -348,20 +447,23 @@ def logout():
 def appointment():
     min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     doctors_map = get_doctors_by_department()
+    
+    # Get current user info
+    conn = get_db_connection()
+    user_info = None
+    if conn:
+        user_info = conn.execute("SELECT name, phone FROM users WHERE username = ?", (session.get("user"),)).fetchone()
+    
     if request.method == "POST":
         form = request.form
-        conn = get_db_connection()
         if not conn: 
             return render_template("appointment.html", username=session.get("user"), 
                                  error="無法連線到資料庫", form_data=form, min_date=min_date, doctor_options=doctors_map)
         
         try:
-            # 檢查時間是否在營業時間 (09:00-21:00) - 已移除限制
-            appt_time = form.get("appointment_time", "")
-            # if not is_time_in_range(appt_time):
-            #     return render_template("appointment.html", username=session.get("user"),
-            #                          error="預約時間需介於 09:00 至 21:00", form_data=form, min_date=min_date,
-            #                          doctor_options=doctors_map)
+            # Use user info from DB if available, otherwise fallback to form (though form should be readonly)
+            patient_name = user_info['name'] if user_info else form.get("patient_name")
+            patient_phone = user_info['phone'] if user_info else form.get("patient_phone")
 
             # SQLite 使用 ? 作為參數佔位符
             sql = """INSERT INTO medical_appointments 
@@ -370,15 +472,16 @@ def appointment():
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')"""
             symptoms = form.get("symptoms", "").strip() or None
             patient_id = form.get("patient_id", "").strip() or None
+            
             conn.execute(sql, (
                 session.get("user"),
                 patient_id,
-                form["patient_name"], 
-                form["patient_phone"], 
+                patient_name,
+                patient_phone, 
                 form["department"], 
                 form["doctor_name"], 
                 form["appointment_date"], 
-                form["appointment_time"],
+                form.get("appointment_time", "09:00"), # Default to 09:00 if not provided
                 symptoms
             ))
             conn.commit()
@@ -389,10 +492,13 @@ def appointment():
             print(f"資料庫寫入錯誤: {e}")
             return render_template("appointment.html", username=session.get("user"), 
                                  error=f"資料庫錯誤: {str(e)}", form_data=form, min_date=min_date,
-                                 doctor_options=doctors_map)
+                                 doctor_options=doctors_map, user_info=user_info)
         finally: 
             conn.close()
-    return render_template("appointment.html", username=session.get("user"), min_date=min_date, doctor_options=doctors_map)
+            
+    conn.close()
+    return render_template("appointment.html", username=session.get("user"), min_date=min_date, 
+                         doctor_options=doctors_map, user_info=user_info)
 
 @app.route("/appointment/list")
 @login_required
@@ -713,6 +819,8 @@ def transcribe_audio():
                 try: os.remove(temp_path)
                 except: pass
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"[錯誤] 語音轉錄失敗: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 

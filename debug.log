@@ -1,0 +1,6 @@
+DEBUG: Updating user repr='verify_refactor_user' with name=ProfileTest Updated, phone=0988777666, id=A123456789
+DEBUG: Updating user repr='verify_refactor_user' with name=ProfileTest Updated, phone=0988777666, id=A123456789
+DEBUG: Exception: UNIQUE constraint failed: users.identity_id
+DEBUG: Updating user repr='verify_refactor_user' with name=ProfileTest Updated, phone=0988777666, id=A12356100
+DEBUG: Rows updated: 1
+DEBUG: Name after update: ProfileTest Updated

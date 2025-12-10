@@ -32,22 +32,37 @@ CREATE TABLE IF NOT EXISTS medical_appointments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username VARCHAR(100) NOT NULL,
     patient_id VARCHAR(50),
-            patient_name VARCHAR(100) NOT NULL,
-            patient_phone VARCHAR(20) NOT NULL,
-            department VARCHAR(100) NOT NULL,
-            doctor_name VARCHAR(100) NOT NULL,
-            appointment_date DATE NOT NULL,
-            appointment_time TIME NOT NULL,
-            symptoms TEXT,
-            status VARCHAR(20) DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
+    patient_name VARCHAR(100) NOT NULL,
+    patient_phone VARCHAR(20) NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    doctor_name VARCHAR(100) NOT NULL,
+    appointment_date DATE NOT NULL,
+    appointment_time TIME NOT NULL,
+    symptoms TEXT,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+"""
+
+create_users_table_sql = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    identity_id VARCHAR(20) NOT NULL UNIQUE,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(200) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+"""
 
 try:
     cursor.execute(create_table_sql)
     print("[成功] 資料表 'medical_appointments' 已創建")
+
+    cursor.execute(create_users_table_sql)
+    print("[成功] 資料表 'users' 已創建")
     
     # 創建索引以提高查詢效能
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON medical_appointments(username)")
