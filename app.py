@@ -211,9 +211,104 @@ def get_whisper_model():
 users = {"admin": generate_password_hash("1234")}
 
 @app.route("/")
+def welcome():
+    return render_template("welcome.html")
+
+@app.route("/home")
 def index():
     doctors_map = get_doctors_by_department()
     return render_template("index.html", username=session.get("user"), doctor_options=doctors_map)
+
+@app.route("/appointment/cancel/<int:apt_id>")
+@login_required
+def cancel_appointment(apt_id):
+    conn = get_db_connection()
+    # 檢查是否為該用戶的預約 We need to verify ownership
+    cursor = conn.execute("SELECT username FROM medical_appointments WHERE id = ?", (apt_id,))
+    apt = cursor.fetchone()
+    
+    if apt and apt['username'] == session.get('user'):
+        conn.execute("UPDATE medical_appointments SET status = 'canceled' WHERE id = ?", (apt_id,))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('appointment_list', success="預約已成功取消"))
+    
+    conn.close()
+    return redirect(url_for('appointment_list', error="無法取消該預約"))
+
+@app.route("/appointment/edit/<int:apt_id>", methods=["GET", "POST"])
+@login_required
+def edit_appointment(apt_id):
+    conn = get_db_connection()
+    
+    # 檢查所有權
+    cursor = conn.execute("SELECT * FROM medical_appointments WHERE id = ?", (apt_id,))
+    apt = cursor.fetchone()
+    
+    if not apt or apt['username'] != session.get('user'):
+        conn.close()
+        return redirect(url_for('appointment_list', error="無法編輯該預約"))
+        
+    doctors_map = get_doctors_by_department()
+    min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    
+    if request.method == "POST":
+        form = request.form
+        
+        # 簡單驗證
+        if not all([form.get("patient_name"), form.get("patient_phone"), form.get("department"), 
+                    form.get("doctor_name"), form.get("appointment_date"), form.get("appointment_time")]):
+             conn.close()
+             return render_template("appointment.html", 
+                                  username=session.get('user'), 
+                                  min_date=min_date,
+                                  doctor_options=doctors_map,
+                                  error="請填寫所有必填欄位",
+                                  form_data=form,
+                                  edit_mode=True,  # 標記為編輯模式
+                                  apt_id=apt_id)
+
+        try:
+             conn.execute("""
+                UPDATE medical_appointments 
+                SET patient_id=?, patient_name=?, patient_phone=?, department=?, 
+                    doctor_name=?, appointment_date=?, appointment_time=?, symptoms=?, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            """, (
+                form.get("patient_id"),
+                form.get("patient_name"),
+                form.get("patient_phone"),
+                form.get("department"),
+                form.get("doctor_name"),
+                form.get("appointment_date"),
+                form.get("appointment_time"),
+                form.get("symptoms"),
+                apt_id
+            ))
+             conn.commit()
+             conn.close()
+             return redirect(url_for('appointment_list', success="預約已成功修改"))
+        except Exception as e:
+             conn.close()
+             return render_template("appointment.html", 
+                                  username=session.get('user'), 
+                                  min_date=min_date, 
+                                  doctor_options=doctors_map, 
+                                  error="修改失敗，請稍後再試",
+                                  form_data=form,
+                                  edit_mode=True,
+                                  apt_id=apt_id)
+
+    # GET 請求：顯示表單並帶入現有資料
+    conn.close()
+    return render_template("appointment.html", 
+                         username=session.get('user'), 
+                         min_date=min_date, 
+                         doctor_options=doctors_map,
+                         form_data=apt,  # 直接使用 apt row 作為初始資料
+                         edit_mode=True,
+                         apt_id=apt_id)
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -245,7 +340,7 @@ def register():
 @app.route("/logout")
 def logout():
     session.pop("user", None)
-    return redirect(url_for("index"))
+    return redirect(url_for("welcome"))
 
 # === 預約功能 ===
 @app.route("/appointment", methods=["GET", "POST"])
@@ -866,28 +961,7 @@ def chat():
 def clear_history():
     return jsonify({"success": True})
 
-@app.route("/appointment/cancel/<int:id>", methods=["POST"])
-@login_required
-def cancel_appointment(id):
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"success": False, "error": "資料庫連接失敗"}), 500
-    try:
-        username = session.get("user")
-        # 檢查權限
-        cursor = conn.execute("SELECT username FROM medical_appointments WHERE id=?", (id,))
-        result = cursor.fetchone()
-        if not result or dict(result)['username'] != username:
-            return jsonify({"success": False, "error": "無權限取消此預約"}), 403
-        
-        conn.execute("UPDATE medical_appointments SET status='cancelled' WHERE id=?", (id,))
-        conn.commit()
-        return jsonify({"success": True, "message": "預約已取消"})
-    except Exception as e:
-        print(f"取消預約錯誤: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally: 
-        conn.close()
+
 
 if __name__ == "__main__":
     app.run(debug=True)

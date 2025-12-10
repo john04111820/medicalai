@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>醫資醫院 - AI助手</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f1f5f9;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+
+        /* 全局背景漸層 */
+        .bg-gradient {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #111827 100%);
+            z-index: 0;
+        }
+
+        /* 雪花動畫 */
+        .snowflake {
+            position: absolute;
+            top: -20px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @keyframes fall {
+            0% {
+                transform: translateY(-10vh) translateX(-10px);
+            }
+
+            50% {
+                transform: translateX(10px);
+            }
+
+            100% {
+                transform: translateY(110vh) translateX(-10px);
+            }
+        }
+
+        /* 主要內容容器 */
+        .main-container {
+            position: relative;
+            z-index: 20;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            animation: fadeIn 1s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Logo 核心區域 */
+        .logo-wrapper {
+            position: relative;
+            margin-bottom: 4rem;
+            cursor: default;
+        }
+
+        .halo-teal {
+            position: absolute;
+            inset: -3rem;
+            background: rgba(20, 184, 166, 0.2);
+            border-radius: 50%;
+            filter: blur(48px);
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .halo-red {
+            position: absolute;
+            inset: -1.5rem;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 50%;
+            filter: blur(40px);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: .5;
+                transform: scale(1.05);
+            }
+        }
+
+        /* 主圖標卡片 */
+        .logo-card {
+            position: relative;
+            width: 12rem;
+            height: 12rem;
+            background: linear-gradient(to bottom, #1e293b, #0f172a);
+            border-radius: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #334155;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            transition: all 0.7s ease;
+        }
+
+        .logo-wrapper:hover .logo-card {
+            transform: scale(1.05);
+            box-shadow: 0 0 50px rgba(20, 184, 166, 0.2);
+        }
+
+        /* 心電圖裝飾 */
+        .ecg-bg {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            border-radius: 2.5rem;
+            opacity: 0.2;
+        }
+
+        .ecg-line {
+            position: absolute;
+            top: 50%;
+            width: 100%;
+            height: 2px;
+            background: #2dd4bf;
+        }
+
+        .ecg-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #2dd4bf;
+            font-size: 4rem;
+            animation: pulse 2s infinite;
+        }
+
+        /* 聖誕帽 */
+        .santa-hat {
+            position: absolute;
+            top: -2rem;
+            right: -1.5rem;
+            transform: rotate(12deg);
+            z-index: 30;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+        }
+
+        .hat-body {
+            width: 5rem;
+            height: 3.5rem;
+            background: #dc2626;
+            border-radius: 50% 50% 0 0;
+            position: relative;
+        }
+
+        .hat-brim {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 1rem;
+            background: #f1f5f9;
+            border-radius: 9999px;
+        }
+
+        .hat-ball {
+            position: absolute;
+            top: -0.75rem;
+            right: -0.75rem;
+            width: 1.75rem;
+            height: 1.75rem;
+            background: #f1f5f9;
+            border-radius: 50%;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 核心圖標 */
+        .main-icon {
+            position: relative;
+            z-index: 10;
+            color: #2dd4bf;
+            font-size: 5rem;
+            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+        }
+
+        /* 標題區域 */
+        .title-area {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .main-title {
+            font-size: 3rem;
+            font-weight: 300;
+            color: white;
+            letter-spacing: 0.1em;
+            margin: 0 0 1.5rem 0;
+            text-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (min-width: 768px) {
+            .main-title {
+                font-size: 3.75rem;
+            }
+        }
+
+        .highlight-text {
+            font-weight: 700;
+            background: linear-gradient(to right, #2dd4bf, #99f6e4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            color: #94a3b8;
+            font-size: 0.875rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        @media (min-width: 768px) {
+            .subtitle {
+                font-size: 1rem;
+            }
+        }
+
+        .sparkle-icon {
+            color: #facc15;
+            font-size: 1rem;
+            animation: pulse 1s infinite;
+        }
+
+        .subtitle-text {
+            border-left: 1px solid #334155;
+            border-right: 1px solid #334155;
+            padding: 0 1rem;
+        }
+
+        /* 啟動按鈕 */
+        .start-btn {
+            position: relative;
+            padding: 1.25rem 3rem;
+            background: #0d9488;
+            color: white;
+            border: none;
+            border-radius: 9999px;
+            font-family: inherit;
+            font-weight: 500;
+            font-size: 1.125rem;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.5s ease;
+            box-shadow: 0 0 20px rgba(20, 184, 166, 0.3);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .start-btn:hover {
+            background: #14b8a6;
+            transform: translateY(-4px);
+            box-shadow: 0 0 40px rgba(20, 184, 166, 0.6);
+        }
+
+        .btn-content {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .btn-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .start-btn:hover .btn-icon {
+            transform: rotate(12deg);
+        }
+
+        /* 按鈕掃描特效 */
+        .btn-scan {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transform: skewX(-20deg);
+            animation: scan 3s infinite;
+        }
+
+        @keyframes scan {
+            0% {
+                left: -100%;
+            }
+
+            100% {
+                left: 200%;
+            }
+        }
+
+        /* 底部版權 */
+        .footer {
+            position: absolute;
+            bottom: 2rem;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .footer p {
+            margin: 0.5rem 0;
+            color: #475569;
+        }
+
+        .footer p:first-child {
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .footer p:last-child {
+            font-size: 0.625rem;
+            color: #334155;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 背景漸層 -->
+    <div class="bg-gradient"></div>
+
+    <!-- 雪花容器 (由 JS 填充) -->
+    <div id="snow-container"></div>
+
+    <!-- 主要內容 -->
+    <div class="main-container">
+
+        <!-- Logo 區域 -->
+        <div class="logo-wrapper">
+            <div class="halo-teal"></div>
+            <div class="halo-red"></div>
+
+            <div class="logo-card">
+                <!-- 心電圖背景 -->
+                <div class="ecg-bg">
+                    <div class="ecg-line"></div>
+                    <i class="fa-solid fa-heart-pulse ecg-icon"></i>
+                </div>
+
+                <!-- 聖誕帽 -->
+                <div class="santa-hat">
+                    <div class="hat-body">
+                        <div class="hat-brim"></div>
+                        <div class="hat-ball"></div>
+                    </div>
+                </div>
+
+                <!-- 核心圖標 -->
+                <i class="fa-solid fa-plus main-icon"></i>
+            </div>
+        </div>
+
+        <!-- 標題區域 -->
+        <div class="title-area">
+            <h1 class="main-title">
+                醫資醫院 <span class="highlight-text">- AI助手</span>
+            </h1>
+            <div class="subtitle">
+                <i class="fa-solid fa-wand-magic-sparkles sparkle-icon"></i>
+                <span class="subtitle-text">預約門診 • 疾病資訊</span>
+                <i class="fa-solid fa-wand-magic-sparkles sparkle-icon" style="animation-delay: 75ms;"></i>
+            </div>
+        </div>
+
+        <!-- 啟動按鈕 -->
+        <a href="/home" class="start-btn">
+            <span class="btn-content">
+                <span>開始諮詢</span>
+                <i class="fa-solid fa-stethoscope btn-icon"></i>
+            </span>
+            <div class="btn-scan"></div>
+        </a>
+
+        <!-- 底部版權 -->
+        <div class="footer">
+            <p>POWERED BY GENERATIVE AI TECHNOLOGY</p>
+            <p>AI 建議僅供參考，不代表正式醫療診斷</p>
+        </div>
+
+    </div>
+
+    <script>
+        // 生成雪花
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('snow-container');
+            const flakeCount = 50;
+
+            for (let i = 0; i < flakeCount; i++) {
+                const flake = document.createElement('div');
+                flake.classList.add('snowflake');
+
+                // 隨機屬性
+                const left = Math.random() * 100;
+                const duration = 8 + Math.random() * 15;
+                const delay = Math.random() * 5;
+                const opacity = 0.2 + Math.random() * 0.5;
+                const size = 3 + Math.random() * 6;
+
+                flake.style.left = `${left}%`;
+                flake.style.width = `${size}px`;
+                flake.style.height = `${size}px`;
+                flake.style.opacity = opacity;
+                flake.style.animation = `fall ${duration}s linear infinite`;
+                flake.style.animationDelay = `${delay}s`;
+
+                container.appendChild(flake);
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -209,6 +209,9 @@ h2 {
 .btn-primary {
     background: var(--primary-color);
     color: white;
+}
+
+.w-100 {
     width: 100%;
 }
 

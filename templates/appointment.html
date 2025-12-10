@@ -15,7 +15,7 @@
     <div class="top-right-nav">
         {% if username %}
         <span class="user-welcome">嗨，{{ username }}</span>
-        <a href="/" class="nav-btn home-btn">
+        <a href="/home" class="nav-btn home-btn">
             <i class="fa-solid fa-house"></i> <span>回首頁</span>
         </a>
         <a href="/appointment/list" class="nav-btn info">
@@ -28,14 +28,18 @@
     </div>
 
     <!-- === 左上角 Logo === -->
-    <a href="/" class="logo-container" title="返回首頁">
+    <a href="/home" class="logo-container" title="返回首頁">
         <i class="fa-solid fa-hospital"></i>
         <span>醫資醫院</span>
     </a>
 
     <!-- === 主要內容 === -->
     <div class="page-container">
+        {% if edit_mode %}
+        <h1><i class="fa-solid fa-pen-to-square"></i> 修改預約</h1>
+        {% else %}
         <h1><i class="fa-solid fa-calendar-plus"></i> 預約門診</h1>
+        {% endif %}
 
         {% if error %}
         <div
@@ -44,7 +48,7 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="/appointment">
+        <form method="POST" action="{{ url_for('edit_appointment', apt_id=apt_id) if edit_mode else '/appointment' }}">
             <div class="form-row">
                 <div class="form-group">
                     <label><i class="fa-solid fa-user"></i> 病患姓名 <span style="color:red">*</span></label>
@@ -104,10 +108,17 @@
             </div>
 
             <div style="margin-top: 30px; display: flex; gap: 15px;">
-                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 確認預約</button>
-                <a href="/" class="btn btn-secondary"
-                    style="text-decoration: none; width: auto; display: inline-block;"><i class="fa-solid fa-xmark"></i>
-                    取消</a>
+                <button type="submit" class="btn btn-primary">
+                    {% if edit_mode %}
+                    <i class="fa-solid fa-pen-to-square"></i> 更新預約
+                    {% else %}
+                    <i class="fa-solid fa-check"></i> 確認預約
+                    {% endif %}
+                </button>
+                <a href="{{ url_for('appointment_list') if edit_mode else '/home' }}" class="btn btn-secondary"
+                    style="text-decoration: none; width: auto; display: inline-block;">
+                    <i class="fa-solid fa-xmark"></i> 取消
+                </a>
             </div>
         </form>
     </div>

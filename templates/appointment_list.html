@@ -15,7 +15,7 @@
     <div class="top-right-nav">
         {% if username %}
         <span class="user-welcome">嗨，{{ username }}</span>
-        <a href="/" class="nav-btn home-btn">
+        <a href="/home" class="nav-btn home-btn">
             <i class="fa-solid fa-house"></i> <span>回首頁</span>
         </a>
         <a href="/appointment" class="nav-btn primary">
@@ -28,7 +28,7 @@
     </div>
 
     <!-- === 左上角 Logo === -->
-    <a href="/" class="logo-container" title="返回首頁">
+    <a href="/home" class="logo-container" title="返回首頁">
         <i class="fa-solid fa-hospital"></i>
         <span>醫資醫院</span>
     </a>
@@ -84,9 +84,21 @@
                             </span>
                         </td>
                         <td>
-                            <!-- 未來可擴充取消/修改功能 -->
-                            <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.8rem;"
-                                disabled>詳情</button>
+                            {% if apt.status == 'pending' %}
+                            <div style="display: flex; gap: 5px;">
+                                <a href="/appointment/edit/{{ apt.id }}" class="btn btn-primary"
+                                    style="padding: 5px 10px; font-size: 0.8rem; background-color: var(--info-color);">
+                                    <i class="fa-solid fa-pen-to-square"></i> 修改
+                                </a>
+                                <a href="/appointment/cancel/{{ apt.id }}" class="btn btn-secondary"
+                                    style="padding: 5px 10px; font-size: 0.8rem; background-color: var(--danger-color);"
+                                    onclick="return confirm('確定要取消此預約嗎？\n此動作無法復原。');">
+                                    <i class="fa-solid fa-ban"></i> 取消
+                                </a>
+                            </div>
+                            {% else %}
+                            <span style="color: #aaa; font-size: 0.85rem;">-</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
