@@ -1,0 +1,11 @@
+Flask
+gunicorn
+Werkzeug
+google-generativeai
+openai-whisper
+torch
+torchaudio
+numpy
+ffmpeg-python
+python-dotenv
+pymysql

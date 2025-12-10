@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>預約門診 - 醫資醫院</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+
+    <!-- === 右上角導覽列 === -->
+    <div class="top-right-nav">
+        {% if username %}
+        <span class="user-welcome">嗨，{{ username }}</span>
+        <a href="/" class="nav-btn home-btn">
+            <i class="fa-solid fa-house"></i> <span>回首頁</span>
+        </a>
+        <a href="/appointment/list" class="nav-btn info">
+            <i class="fa-solid fa-calendar-check"></i> <span>我的預約</span>
+        </a>
+        <a href="/logout" class="nav-btn logout-btn">登出</a>
+        {% else %}
+        <a href="/login" class="nav-btn login-btn">登入</a>
+        {% endif %}
+    </div>
+
+    <!-- === 左上角 Logo === -->
+    <a href="/" class="logo-container" title="返回首頁">
+        <i class="fa-solid fa-hospital"></i>
+        <span>醫資醫院</span>
+    </a>
+
+    <!-- === 主要內容 === -->
+    <div class="page-container">
+        <h1><i class="fa-solid fa-calendar-plus"></i> 預約門診</h1>
+
+        {% if error %}
+        <div
+            style="background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #f5c6cb;">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/appointment">
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fa-solid fa-user"></i> 病患姓名 <span style="color:red">*</span></label>
+                    <input type="text" name="patient_name" required placeholder="請輸入真實姓名"
+                        value="{{ form_data.patient_name if form_data else '' }}">
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-phone"></i> 聯絡電話 <span style="color:red">*</span></label>
+                    <input type="tel" name="patient_phone" required placeholder="請輸入聯絡電話"
+                        value="{{ form_data.patient_phone if form_data else '' }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label><i class="fa-regular fa-id-card"></i> 病歷號（選填）</label>
+                <input type="text" name="patient_id" placeholder="如：P12345"
+                    value="{{ form_data.patient_id if form_data else '' }}">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fa-solid fa-user-doctor"></i> 科別 <span style="color:red">*</span></label>
+                    <select name="department" id="department" required onchange="updateDoctors()">
+                        <option value="">請選擇科別</option>
+                        {% for dept in doctor_options.keys() %}
+                        <option value="{{ dept }}" {% if form_data and form_data.department==dept %}selected{% endif %}>
+                            {{ dept }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-user-md"></i> 醫師 <span style="color:red">*</span></label>
+                    <select name="doctor_name" id="doctor_name" required>
+                        <option value="">請先選擇科別</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fa-regular fa-calendar"></i> 預約日期 <span style="color:red">*</span></label>
+                    <input type="date" name="appointment_date" min="{{ min_date }}" required
+                        value="{{ form_data.appointment_date if form_data else '' }}">
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-regular fa-clock"></i> 預約時間 <span style="color:red">*</span></label>
+                    <input type="time" name="appointment_time" required
+                        value="{{ form_data.appointment_time if form_data else '' }}">
+                    <small style="color: #6c757d; display: block; margin-top: 5px;">請選擇 09:00 - 21:00 之間的時段</small>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label><i class="fa-solid fa-notes-medical"></i> 症狀描述（選填）</label>
+                <textarea name="symptoms" rows="3"
+                    placeholder="請簡述您的症狀或就醫需求...">{{ form_data.symptoms if form_data else '' }}</textarea>
+            </div>
+
+            <div style="margin-top: 30px; display: flex; gap: 15px;">
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> 確認預約</button>
+                <a href="/" class="btn btn-secondary"
+                    style="text-decoration: none; width: auto; display: inline-block;"><i class="fa-solid fa-xmark"></i>
+                    取消</a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const doctorOptions = {{ doctor_options| tojson | safe }};
+        const deptSelect = document.getElementById('department');
+        const doctorSelect = document.getElementById('doctor_name');
+
+        // 如果表單有保留選值（例如驗證失敗回來時），嘗試恢復醫師選項
+        const selectedDoctor = "{{ form_data.doctor_name if form_data else '' }}";
+
+        function updateDoctors() {
+            const dept = deptSelect.value;
+            doctorSelect.innerHTML = '<option value="">請選擇醫師</option>';
+
+            if (dept && doctorOptions[dept]) {
+                doctorOptions[dept].forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.doctor_name;
+                    const shift = doc.shift === 'morning' ? '早班' : '午班';
+                    option.textContent = `${doc.doctor_name} (${shift})`;
+                    if (doc.doctor_name === selectedDoctor) {
+                        option.selected = true;
+                    }
+                    doctorSelect.appendChild(option);
+                });
+            }
+        }
+
+        // 初始化
+        if (deptSelect.value) {
+            updateDoctors();
+        }
+    </script>
+</body>
+
+</html>
