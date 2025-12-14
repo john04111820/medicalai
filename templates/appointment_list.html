@@ -150,11 +150,18 @@
                 const firstRow = document.querySelector('tbody tr');
                 if (firstRow) {
                     const dept = firstRow.cells[2].textContent;
-                    const numText = firstRow.querySelector('.appointment-number').textContent.trim();
+                    const numElement = firstRow.querySelector('.appointment-number');
 
-                    document.getElementById('successDepartment').textContent = dept;
-                    document.getElementById('successAppointmentNumber').textContent = numText;
-                    document.getElementById('successModal').style.display = 'flex';
+                    if (numElement) {
+                        const numText = numElement.textContent.trim();
+                        document.getElementById('successDepartment').textContent = dept;
+                        document.getElementById('successAppointmentNumber').textContent = numText;
+                        document.getElementById('successModal').style.display = 'flex';
+                    } else {
+                        // 如果找不到看診號碼 (例如是取消操作，該行顯示為預約已取消)，則使用 Alert 或簡單提示
+                        // 或者只顯示訊息
+                        alert(successMsg);
+                    }
                 }
             }
         });
