@@ -478,7 +478,7 @@ def appointment():
             patient_phone = user_info['phone'] if user_info else form.get("patient_phone")
 
             # 計算當日該科別的最新號碼 (獨立編號邏輯)
-            cursor.execute("""
+            cursor = conn.execute("""
                 SELECT MAX(visit_number) FROM medical_appointments 
                 WHERE department = ? AND appointment_date = ?
             """, (form["department"], form["appointment_date"]))
