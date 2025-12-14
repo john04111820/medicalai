@@ -253,7 +253,7 @@ def cancel_appointment(apt_id):
     apt = cursor.fetchone()
     
     if apt and apt['username'] == session.get('user'):
-        conn.execute("UPDATE medical_appointments SET status = 'canceled' WHERE id = ?", (apt_id,))
+        conn.execute("UPDATE medical_appointments SET status = 'cancelled' WHERE id = ?", (apt_id,))
         conn.commit()
         conn.close()
         return redirect(url_for('appointment_list', success="預約已成功取消"))

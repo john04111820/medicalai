@@ -76,7 +76,7 @@
                         <td>{{ apt.doctor_name }}</td>
                         <td>{{ apt.patient_name }}</td>
                         <td>
-                            {% if apt.status == 'cancelled' %}
+                            {% if apt.status == 'cancelled' or apt.status == 'canceled' %}
                             <span style="color:var(--danger-color); font-weight:bold;">預約已取消</span>
                             {% else %}
                             <span class="appointment-number" style="font-weight: 600; color: var(--primary-color);">
@@ -142,7 +142,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // 檢查是否有成功訊息
-            const successMsg = "{{ success }}";
+            let successMsg = "{{ success }}";
+            if (successMsg === "None") successMsg = "";
+
             if (successMsg && successMsg.length > 0) {
                 // 獲取表格第一行的資料
                 const firstRow = document.querySelector('tbody tr');
