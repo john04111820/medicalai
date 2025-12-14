@@ -63,7 +63,7 @@
                         <th>科別</th>
                         <th>醫師</th>
                         <th>病患姓名</th>
-                        <th>狀態</th>
+                        <th>看診號碼</th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -76,13 +76,8 @@
                         <td>{{ apt.doctor_name }}</td>
                         <td>{{ apt.patient_name }}</td>
                         <td>
-                            <span class="status-badge 
-                                {% if apt.status == 'pending' %}status-pending
-                                {% elif apt.status == 'canceled' %}status-canceled
-                                {% else %}status-confirmed{% endif %}">
-                                {% if apt.status == 'pending' %}待確認
-                                {% elif apt.status == 'canceled' %}已取消
-                                {% else %}已確認{% endif %}
+                            <span class="appointment-number" style="font-weight: 600; color: var(--primary-color);">
+                                NO.{{ '%03d' % apt.id }}
                             </span>
                         </td>
                         <td>
@@ -116,6 +111,48 @@
         {% endif %}
     </div>
 
+    <!-- === 預約成功彈窗 === -->
+    <div id="successModal" class="modal-overlay"
+        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div class="modal-content"
+            style="background: white; width: 90%; max-width: 450px; border-radius: 16px; padding: 30px; text-align: center; position: relative;">
+            <div
+                style="width: 80px; height: 80px; background: #28a745; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-check" style="color: white; font-size: 3rem;"></i>
+            </div>
+            <h2 style="color: #28a745; margin-bottom: 15px;">預約成功！</h2>
+            <p style="font-size: 1.1rem; color: var(--dark-text); margin-bottom: 10px;">
+                已成功預約 <strong id="successDepartment" style="color: var(--primary-color);"></strong>
+            </p>
+            <p style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color); margin: 20px 0;">
+                您的看診號碼：<span id="successAppointmentNumber"></span>
+            </p>
+            <div style="margin-top: 30px;">
+                <button onclick="document.getElementById('successModal').style.display='none'" class="btn btn-primary">
+                    <i class="fa-solid fa-check"></i> 我知道了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // 檢查是否有成功訊息
+            const successMsg = "{{ success }}";
+            if (successMsg && successMsg.length > 0) {
+                // 獲取表格第一行的資料
+                const firstRow = document.querySelector('tbody tr');
+                if (firstRow) {
+                    const dept = firstRow.cells[2].textContent;
+                    const numText = firstRow.querySelector('.appointment-number').textContent.trim();
+
+                    document.getElementById('successDepartment').textContent = dept;
+                    document.getElementById('successAppointmentNumber').textContent = numText;
+                    document.getElementById('successModal').style.display = 'flex';
+                }
+            }
+        });
+    </script>
 </body>
 
 </html>

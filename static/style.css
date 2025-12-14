@@ -345,11 +345,12 @@ h2 {
 
 .message.user-message {
     align-self: flex-end;
-    flex-direction: row-reverse;
+    flex-direction: row;
 }
 
 .message.assistant-message {
     align-self: flex-start;
+    flex-direction: row;
 }
 
 .message-avatar {

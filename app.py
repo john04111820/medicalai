@@ -473,7 +473,7 @@ def appointment():
             symptoms = form.get("symptoms", "").strip() or None
             patient_id = form.get("patient_id", "").strip() or None
             
-            conn.execute(sql, (
+            cursor = conn.execute(sql, (
                 session.get("user"),
                 patient_id,
                 patient_name,
@@ -484,12 +484,28 @@ def appointment():
                 form.get("appointment_time", "09:00"), # Default to 09:00 if not provided
                 symptoms
             ))
+            appointment_id = cursor.lastrowid
             conn.commit()
             success_msg = "預約成功！"
+            
+            # 檢查是否為AJAX請求 (從fetch發送的請求)
+            # 必須嚴格檢查 X-Requested-With，因為某些瀏覽器的普通請求也可能被判定為 accept_json
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    "success": True,
+                    "message": success_msg,
+                    "appointment_id": appointment_id,
+                    "department": form["department"]
+                })
             
             return redirect(url_for("appointment_list", success=success_msg))
         except Exception as e:
             print(f"資料庫寫入錯誤: {e}")
+            
+            # 如果是AJAX請求，返回JSON錯誤
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "error": f"資料庫錯誤: {str(e)}"}), 500
+            
             return render_template("appointment.html", username=session.get("user"), 
                                  error=f"資料庫錯誤: {str(e)}", form_data=form, min_date=min_date,
                                  doctor_options=doctors_map, user_info=user_info)
@@ -1068,6 +1084,31 @@ def chat():
 @app.route("/api/clear-history", methods=["POST"])
 def clear_history():
     return jsonify({"success": True})
+
+@app.route("/api/get-latest-appointment", methods=["GET"])
+@login_required
+def get_latest_appointment():
+    """獲取當前用戶最新的預約ID"""
+    try:
+        username = session.get("user")
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"success": False, "error": "資料庫連接失敗"}), 500
+        
+        cursor = conn.execute(
+            "SELECT id FROM medical_appointments WHERE username = ? ORDER BY id DESC LIMIT 1",
+            (username,)
+        )
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return jsonify({"success": True, "appointment_id": result['id']})
+        else:
+            return jsonify({"success": False, "error": "找不到預約記錄"}), 404
+    except Exception as e:
+        print(f"[錯誤] 獲取最新預約失敗: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 

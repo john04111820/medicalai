@@ -204,7 +204,35 @@
         </div>
     </div>
 
+    <!-- === 預約成功彈窗 === -->
+    <div id="successModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 450px; text-align: center;">
+            <div
+                style="width: 80px; height: 80px; background: #28a745; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-check" style="color: white; font-size: 3rem;"></i>
+            </div>
+            <h2 style="color: #28a745; margin-bottom: 15px;">預約成功！</h2>
+            <p style="font-size: 1.1rem; color: var(--dark-text); margin-bottom: 10px;">
+                已成功預約 <strong id="successDepartment" style="color: var(--primary-color);"></strong>
+            </p>
+            <p style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color); margin: 20px 0;">
+                您的看診號碼：<span id="successAppointmentNumber"></span>
+            </p>
+            <div style="margin-top: 30px; display: flex; gap: 10px; justify-content: center;">
+                <button onclick="closeSuccessModal(); window.location='/appointment/list';" class="btn btn-primary">
+                    <i class="fa-solid fa-list"></i> 查看我的預約
+                </button>
+                <button onclick="closeSuccessModal();" class="btn btn-secondary">
+                    <i class="fa-solid fa-times"></i> 關閉
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // 注入登入狀態 (由後端傳入)
+        const isLoggedIn = {{ 'true' if username else 'false' }};
+
         const micButton = document.getElementById('micButton');
         const textInput = document.getElementById('textInput');
         const sendButton = document.getElementById('sendButton');
@@ -368,6 +396,12 @@
 
             const isCreateIntent = createKeywords.some(k => message.includes(k));
             if (isCreateIntent) {
+                if (!isLoggedIn) {
+                    if (confirm('您需要登入才能進行預約。是否立即前往登入頁面？')) {
+                        window.location.href = '/login';
+                    }
+                    return;
+                }
                 openAppointmentModal();
                 // Optionally keep text or clear it? Clearing for clean UI
                 // textInput.value = ''; 
@@ -590,6 +624,38 @@
             if (e.target === scheduleModal) closeScheduleModal();
         });
 
+        // === 成功彈窗控制函數 ===
+        const successModal = document.getElementById('successModal');
+        const successDepartment = document.getElementById('successDepartment');
+        const successAppointmentNumber = document.getElementById('successAppointmentNumber');
+
+        function showSuccessModal(department) {
+            // 獲取最新的預約號碼
+            fetch('/api/get-latest-appointment')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.appointment_id) {
+                        const appointmentNum = String(data.appointment_id).padStart(3, '0');
+                        successDepartment.textContent = department;
+                        successAppointmentNumber.textContent = `NO.${appointmentNum}`;
+                        successModal.style.display = 'flex';
+                    } else {
+                        // 如果無法獲取號碼，顯示簡單成功訊息後跳轉
+                        alert(`預約${department}成功！`);
+                        window.location = '/appointment/list';
+                    }
+                })
+                .catch(err => {
+                    console.error('獲取預約號碼失敗:', err);
+                    alert(`預約${department}成功！`);
+                    window.location = '/appointment/list';
+                });
+        }
+
+        function closeSuccessModal() {
+            successModal.style.display = 'none';
+        }
+
         const modalDate = document.getElementById('modalDate');
         const modalTomorrow = new Date();
         modalTomorrow.setDate(modalTomorrow.getDate() + 1);
@@ -599,18 +665,37 @@
             e.preventDefault();
             const formData = new FormData(modalForm);
             try {
-                const response = await fetch('/appointment', { method: 'POST', body: formData });
-                if (response.redirected) {
-                    window.location = response.url;
-                    return;
-                }
-                const text = await response.text();
-                // 簡單檢查返回內容是否包含成功訊息
-                if (text.includes('我的預約') || text.includes('預約成功')) {
-                    window.location = '/appointment/list';
+                const response = await fetch('/appointment', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                // 嘗試解析JSON
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    if (data.success) {
+                        // 關閉預約表單彈窗
+                        closeAppointmentModal();
+
+                        // 直接使用返回的數據顯示成功彈窗
+                        const appointmentNum = String(data.appointment_id).padStart(3, '0');
+                        successDepartment.textContent = data.department;
+                        successAppointmentNumber.textContent = `NO.${appointmentNum}`;
+                        successModal.style.display = 'flex';
+                    } else {
+                        alert('預約失敗：' + (data.error || '未知錯誤'));
+                    }
                 } else {
-                    // 如果還是返回 html (可能是有錯誤訊息), 從 text 中抓取 error
-                    alert('提交可能失敗，請確認表單或稍後再試');
+                    // 如果返回HTML（非AJAX情況），則跳轉
+                    if (response.redirected) {
+                        window.location = response.url;
+                    } else {
+                        window.location = '/appointment/list';
+                    }
                 }
             } catch (err) {
                 console.error('預約提交失敗:', err);
