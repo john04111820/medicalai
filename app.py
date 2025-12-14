@@ -60,6 +60,18 @@ def init_db():
         )
         """
         cursor.execute(create_table_sql)
+        
+        # === 資料庫遷移：檢查並新增 visit_number 欄位 ===
+        cursor.execute("PRAGMA table_info(medical_appointments)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'visit_number' not in columns:
+            print("正在執行資料庫遷移：新增 visit_number 欄位...")
+            cursor.execute("ALTER TABLE medical_appointments ADD COLUMN visit_number INTEGER DEFAULT 0")
+            # 為了兼容舊資料，將 visit_number 設為 id (或者 1)
+            # 這裡我們簡單地將舊資料的 visit_number 更新為 id，確保不為 0
+            cursor.execute("UPDATE medical_appointments SET visit_number = id WHERE visit_number = 0")
+            conn.commit()
+            print("資料庫遷移完成。")
 
         # 建立使用者資料表
         cursor.execute("""
@@ -465,11 +477,20 @@ def appointment():
             patient_name = user_info['name'] if user_info else form.get("patient_name")
             patient_phone = user_info['phone'] if user_info else form.get("patient_phone")
 
+            # 計算當日該科別的最新號碼 (獨立編號邏輯)
+            cursor.execute("""
+                SELECT MAX(visit_number) FROM medical_appointments 
+                WHERE department = ? AND appointment_date = ?
+            """, (form["department"], form["appointment_date"]))
+            result = cursor.fetchone()
+            current_max = result[0] if result[0] else 0
+            new_visit_number = current_max + 1
+
             # SQLite 使用 ? 作為參數佔位符
             sql = """INSERT INTO medical_appointments 
                     (username, patient_id, patient_name, patient_phone, department, doctor_name, 
-                        appointment_date, appointment_time, symptoms, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')"""
+                        appointment_date, appointment_time, symptoms, status, visit_number) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)"""
             symptoms = form.get("symptoms", "").strip() or None
             patient_id = form.get("patient_id", "").strip() or None
             
@@ -482,19 +503,19 @@ def appointment():
                 form["doctor_name"], 
                 form["appointment_date"], 
                 form.get("appointment_time", "09:00"), # Default to 09:00 if not provided
-                symptoms
+                symptoms,
+                new_visit_number
             ))
             appointment_id = cursor.lastrowid
             conn.commit()
             success_msg = "預約成功！"
             
-            # 檢查是否為AJAX請求 (從fetch發送的請求)
-            # 必須嚴格檢查 X-Requested-With，因為某些瀏覽器的普通請求也可能被判定為 accept_json
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
                     "success": True,
                     "message": success_msg,
                     "appointment_id": appointment_id,
+                    "visit_number": new_visit_number,
                     "department": form["department"]
                 })
             

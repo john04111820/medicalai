@@ -76,9 +76,13 @@
                         <td>{{ apt.doctor_name }}</td>
                         <td>{{ apt.patient_name }}</td>
                         <td>
+                            {% if apt.status == 'cancelled' %}
+                            <span style="color:var(--danger-color); font-weight:bold;">預約已取消</span>
+                            {% else %}
                             <span class="appointment-number" style="font-weight: 600; color: var(--primary-color);">
-                                NO.{{ '%03d' % apt.id }}
+                                NO.{{ '%03d' % (apt.visit_number if apt.visit_number else apt.id) }}
                             </span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if apt.status == 'pending' %}

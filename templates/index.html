@@ -682,7 +682,9 @@
                         closeAppointmentModal();
 
                         // 直接使用返回的數據顯示成功彈窗
-                        const appointmentNum = String(data.appointment_id).padStart(3, '0');
+                        // 如果有 visit_number 則優先使用，否則使用 appointment_id
+                        const num = data.visit_number || data.appointment_id;
+                        const appointmentNum = String(num).padStart(3, '0');
                         successDepartment.textContent = data.department;
                         successAppointmentNumber.textContent = `NO.${appointmentNum}`;
                         successModal.style.display = 'flex';
