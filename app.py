@@ -192,11 +192,37 @@ medical_system_prompt = """你是一位專業的醫療AI助理，專門協助處
 
 gemini_model = None
 
+def save_gemini_api_key_to_env(api_key):
+    """將 GEMINI_API_KEY 寫入 .env（存在則覆蓋，不存在則新增）。"""
+    env_path = os.path.join(basedir, '.env')
+    new_line = f"GEMINI_API_KEY={api_key}"
+
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            lines = f.read().splitlines()
+
+    updated = False
+    for i, line in enumerate(lines):
+        if line.startswith('GEMINI_API_KEY='):
+            lines[i] = new_line
+            updated = True
+            break
+
+    if not updated:
+        lines.append(new_line)
+
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines).rstrip() + '\n')
+
 def resolve_gemini_api_key():
     """優先讀取環境變數；若本機互動執行且未設定，則命令列詢問。"""
     key = (os.getenv("GEMINI_API_KEY") or "").strip()
     if key:
         return key
+
+    if "--set-api-key" in sys.argv:
+        return ""
 
     if __name__ == "__main__" and sys.stdin and sys.stdin.isatty():
         try:
@@ -211,6 +237,10 @@ def resolve_gemini_api_key():
 
 def init_gemini_model():
     global gemini_model
+
+    if "--set-api-key" in sys.argv:
+        return
+
     api_key = resolve_gemini_api_key()
 
     if not api_key:
@@ -223,6 +253,21 @@ def init_gemini_model():
         print("[成功] Gemini 醫療AI模型已初始化")
     except Exception as e:
         print(f"[錯誤] Gemini 模型初始化失敗: {e}")
+
+def handle_set_api_key_command():
+    """命令列指令：互動式輸入 API key 並寫入 .env。"""
+    if not (sys.stdin and sys.stdin.isatty()):
+        print("[錯誤] 目前不是互動式終端機，無法輸入 API key")
+        return
+
+    api_key = input("請輸入要儲存的 Gemini API Key: ").strip()
+    if not api_key:
+        print("[取消] 未輸入 API Key，未進行任何變更")
+        return
+
+    save_gemini_api_key_to_env(api_key)
+    os.environ["GEMINI_API_KEY"] = api_key
+    print("[成功] 已寫入 .env 的 GEMINI_API_KEY")
 
 init_gemini_model()
 
@@ -1007,7 +1052,13 @@ def clear_history():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    if "--set-api-key" in sys.argv:
+        handle_set_api_key_command()
+    else:
+        app.run(debug=True)
+
+
+
 
 
 
