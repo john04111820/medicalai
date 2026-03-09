@@ -220,22 +220,22 @@ def is_set_api_key_command():
     args = sys.argv[1:]
     return "--set-api-key" in args or "set-key" in args
 def resolve_gemini_api_key():
-    """優先讀取環境變數；若本機互動執行且未設定，則命令列詢問。"""
-    key = (os.getenv("GEMINI_API_KEY") or "").strip()
-    if key:
-        return key
-
+    """優先使用本次新輸入的 key；未輸入時才回退到既有設定。"""
     if is_set_api_key_command():
         return ""
 
     if __name__ == "__main__" and sys.stdin and sys.stdin.isatty():
         try:
-            user_key = input("請輸入 Gemini API Key（直接按 Enter 可略過）: ").strip()
+            user_key = input("請輸入 Gemini API Key（直接按 Enter 使用既有設定）: ").strip()
             if user_key:
                 os.environ["GEMINI_API_KEY"] = user_key
                 return user_key
         except EOFError:
             pass
+
+    key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if key:
+        return key
 
     return ""
 
@@ -1060,6 +1060,7 @@ if __name__ == "__main__":
         handle_set_api_key_command()
     else:
         app.run(debug=True)
+
 
 
 
