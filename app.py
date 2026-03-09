@@ -1,4 +1,4 @@
-﻿from flask import Flask, render_template_string, request, redirect, url_for, session, render_template, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, session, render_template, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 import whisper
 import os
@@ -9,6 +9,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from functools import wraps
 import re
+import sys
 
 print("="*50)
 print("啟動應用程式 (純 SQLite 版)")
@@ -153,13 +154,7 @@ def is_time_in_range(time_str, start="09:00", end="21:00"):
         return False
 
 # === AI 模型設定 ===
-gemini_model = None
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    try:
-        genai.configure(api_key=api_key)
-        # 設定醫療專用的系統提示詞
-        medical_system_prompt = """你是一位專業的醫療AI助理，專門協助處理醫療相關問題和預約服務。
+medical_system_prompt = """你是一位專業的醫療AI助理，專門協助處理醫療相關問題和預約服務。
 
 重要規則：
 1. 所有回答必須使用繁體中文
@@ -194,13 +189,42 @@ if api_key:
 3. 更新預約資訊
 
 請始終以專業、友善的態度回答，並確保所有資訊準確無誤。"""
-        
+
+gemini_model = None
+
+def resolve_gemini_api_key():
+    """優先讀取環境變數；若本機互動執行且未設定，則命令列詢問。"""
+    key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if key:
+        return key
+
+    if __name__ == "__main__" and sys.stdin and sys.stdin.isatty():
+        try:
+            user_key = input("請輸入 Gemini API Key（直接按 Enter 可略過）: ").strip()
+            if user_key:
+                os.environ["GEMINI_API_KEY"] = user_key
+                return user_key
+        except EOFError:
+            pass
+
+    return ""
+
+def init_gemini_model():
+    global gemini_model
+    api_key = resolve_gemini_api_key()
+
+    if not api_key:
+        print("[警告] 未找到 GEMINI_API_KEY，AI 聊天功能將無法使用")
+        return
+
+    try:
+        genai.configure(api_key=api_key)
         gemini_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=medical_system_prompt)
         print("[成功] Gemini 醫療AI模型已初始化")
     except Exception as e:
         print(f"[錯誤] Gemini 模型初始化失敗: {e}")
-else:
-    print("[警告] 未找到 GEMINI_API_KEY，AI 聊天功能將無法使用")
+
+init_gemini_model()
 
 whisper_model = None
 def get_whisper_model():
@@ -984,6 +1008,7 @@ def clear_history():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
