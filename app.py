@@ -113,6 +113,12 @@ def init_db():
 # 啟動時初始化資料庫
 init_db()
 
+def normalize_lang(value):
+    return 'en' if str(value).lower() == 'en' else 'zh'
+
+def get_request_lang(default='zh'):
+    return normalize_lang(request.values.get('lang', default))
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -217,11 +223,13 @@ def welcome():
 @app.route("/home")
 def index():
     doctors_map = get_doctors_by_department()
-    return render_template("index.html", username=session.get("user"), doctor_options=doctors_map)
+    lang = normalize_lang(request.args.get('lang', 'zh'))
+    return render_template("index.html", username=session.get("user"), doctor_options=doctors_map, lang=lang)
 
 @app.route("/appointment/cancel/<int:apt_id>")
 @login_required
 def cancel_appointment(apt_id):
+    lang = get_request_lang()
     conn = get_db_connection()
     # 檢查是否為該用戶的預約 We need to verify ownership
     cursor = conn.execute("SELECT username FROM medical_appointments WHERE id = ?", (apt_id,))
@@ -231,14 +239,15 @@ def cancel_appointment(apt_id):
         conn.execute("UPDATE medical_appointments SET status = 'canceled' WHERE id = ?", (apt_id,))
         conn.commit()
         conn.close()
-        return redirect(url_for('appointment_list', success="預約已成功取消"))
+        return redirect(url_for('appointment_list', success="預約已成功取消", lang=lang))
     
     conn.close()
-    return redirect(url_for('appointment_list', error="無法取消該預約"))
+    return redirect(url_for('appointment_list', error="無法取消該預約", lang=lang))
 
 @app.route("/appointment/edit/<int:apt_id>", methods=["GET", "POST"])
 @login_required
 def edit_appointment(apt_id):
+    lang = get_request_lang()
     conn = get_db_connection()
     
     # 檢查所有權
@@ -247,7 +256,7 @@ def edit_appointment(apt_id):
     
     if not apt or apt['username'] != session.get('user'):
         conn.close()
-        return redirect(url_for('appointment_list', error="無法編輯該預約"))
+        return redirect(url_for('appointment_list', error="無法編輯該預約", lang=lang))
         
     doctors_map = get_doctors_by_department()
     min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
@@ -261,11 +270,12 @@ def edit_appointment(apt_id):
              conn.close()
              return render_template("appointment.html", 
                                   username=session.get('user'), 
+                                  lang=lang,
                                   min_date=min_date,
                                   doctor_options=doctors_map,
                                   error="請填寫所有必填欄位",
                                   form_data=form,
-                                  edit_mode=True,  # 標記為編輯模式
+                                  edit_mode=True,
                                   apt_id=apt_id)
 
         try:
@@ -287,11 +297,12 @@ def edit_appointment(apt_id):
             ))
              conn.commit()
              conn.close()
-             return redirect(url_for('appointment_list', success="預約已成功修改"))
-        except Exception as e:
+             return redirect(url_for('appointment_list', success="預約已成功修改", lang=lang))
+        except Exception:
              conn.close()
              return render_template("appointment.html", 
                                   username=session.get('user'), 
+                                  lang=lang,
                                   min_date=min_date, 
                                   doctor_options=doctors_map, 
                                   error="修改失敗，請稍後再試",
@@ -299,15 +310,16 @@ def edit_appointment(apt_id):
                                   edit_mode=True,
                                   apt_id=apt_id)
 
-    # GET 請求：顯示表單並帶入現有資料
     conn.close()
     return render_template("appointment.html", 
                          username=session.get('user'), 
+                         lang=lang,
                          min_date=min_date, 
                          doctor_options=doctors_map,
-                         form_data=apt,  # 直接使用 apt row 作為初始資料
+                         form_data=apt,
                          edit_mode=True,
                          apt_id=apt_id)
+
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -346,24 +358,17 @@ def logout():
 @app.route("/appointment", methods=["GET", "POST"])
 @login_required
 def appointment():
+    lang = get_request_lang()
     min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     doctors_map = get_doctors_by_department()
     if request.method == "POST":
         form = request.form
         conn = get_db_connection()
-        if not conn: 
-            return render_template("appointment.html", username=session.get("user"), 
+        if not conn:
+            return render_template("appointment.html", username=session.get("user"), lang=lang,
                                  error="無法連線到資料庫", form_data=form, min_date=min_date, doctor_options=doctors_map)
-        
-        try:
-            # 檢查時間是否在營業時間 (09:00-21:00) - 已移除限制
-            appt_time = form.get("appointment_time", "")
-            # if not is_time_in_range(appt_time):
-            #     return render_template("appointment.html", username=session.get("user"),
-            #                          error="預約時間需介於 09:00 至 21:00", form_data=form, min_date=min_date,
-            #                          doctor_options=doctors_map)
 
-            # SQLite 使用 ? 作為參數佔位符
+        try:
             sql = """INSERT INTO medical_appointments 
                     (username, patient_id, patient_name, patient_phone, department, doctor_name, 
                         appointment_date, appointment_time, symptoms, status) 
@@ -373,63 +378,56 @@ def appointment():
             conn.execute(sql, (
                 session.get("user"),
                 patient_id,
-                form["patient_name"], 
-                form["patient_phone"], 
-                form["department"], 
-                form["doctor_name"], 
-                form["appointment_date"], 
+                form["patient_name"],
+                form["patient_phone"],
+                form["department"],
+                form["doctor_name"],
+                form["appointment_date"],
                 form["appointment_time"],
                 symptoms
             ))
             conn.commit()
-            success_msg = "預約成功！"
-            
-            return redirect(url_for("appointment_list", success=success_msg))
+            success_msg = "Appointment created successfully!" if lang == 'en' else "預約成功！"
+            return redirect(url_for("appointment_list", success=success_msg, lang=lang))
         except Exception as e:
             print(f"資料庫寫入錯誤: {e}")
-            return render_template("appointment.html", username=session.get("user"), 
+            return render_template("appointment.html", username=session.get("user"), lang=lang,
                                  error=f"資料庫錯誤: {str(e)}", form_data=form, min_date=min_date,
                                  doctor_options=doctors_map)
-        finally: 
+        finally:
             conn.close()
-    return render_template("appointment.html", username=session.get("user"), min_date=min_date, doctor_options=doctors_map)
+    return render_template("appointment.html", username=session.get("user"), lang=lang, min_date=min_date, doctor_options=doctors_map)
 
 @app.route("/appointment/list")
 @login_required
 def appointment_list():
+    lang = normalize_lang(request.args.get('lang', 'zh'))
     conn = get_db_connection()
-    if not conn: 
-        return render_template("appointment_list.html", username=session.get("user"), 
+    if not conn:
+        return render_template("appointment_list.html", username=session.get("user"), lang=lang,
                              appointments=[], error="無法連線到資料庫")
     try:
         username = session.get("user")
-        # SQLite 查詢
         cursor = conn.execute(
-            "SELECT * FROM medical_appointments WHERE username=? ORDER BY appointment_date DESC, appointment_time DESC", 
+            "SELECT * FROM medical_appointments WHERE username=? ORDER BY appointment_date DESC, appointment_time DESC",
             (username,)
         )
-        # 將 Row 對象轉換為字典
         appointments = [dict(row) for row in cursor.fetchall()]
-        
-        # 格式化日期時間
+
         for apt in appointments:
-            if apt.get('appointment_date'):
-                # 如果不是字串才轉換，SQLite有時存字串有時存物件
-                if not isinstance(apt['appointment_date'], str):
-                    apt['appointment_date'] = apt['appointment_date'].strftime('%Y-%m-%d')
-            if apt.get('appointment_time'):
-                if not isinstance(apt['appointment_time'], str):
-                    apt['appointment_time'] = apt['appointment_time'].strftime('%H:%M')
-            if apt.get('created_at'):
-                if not isinstance(apt['created_at'], str):
-                    apt['created_at'] = apt['created_at'].strftime('%Y-%m-%d %H:%M:%S')
-        
-        return render_template("appointment_list.html", username=username, 
+            if apt.get('appointment_date') and not isinstance(apt['appointment_date'], str):
+                apt['appointment_date'] = apt['appointment_date'].strftime('%Y-%m-%d')
+            if apt.get('appointment_time') and not isinstance(apt['appointment_time'], str):
+                apt['appointment_time'] = apt['appointment_time'].strftime('%H:%M')
+            if apt.get('created_at') and not isinstance(apt['created_at'], str):
+                apt['created_at'] = apt['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+
+        return render_template("appointment_list.html", username=username, lang=lang,
                              appointments=appointments, success=request.args.get("success"))
     except Exception as e:
-        return render_template("appointment_list.html", username=session.get("user"), 
+        return render_template("appointment_list.html", username=session.get("user"), lang=lang,
                              appointments=[], error=str(e))
-    finally: 
+    finally:
         conn.close()
 
 # === AI 輔助函數 ===
@@ -720,6 +718,7 @@ def transcribe_audio():
 def chat():
     """AI 聊天 API（整合資料庫查詢、創建和修改預約功能）"""
     global gemini_model
+    is_english = False
     
     if not gemini_model:
         return jsonify({
@@ -733,7 +732,12 @@ def chat():
         
         message = data.get("message", "").strip()
         if not message: return jsonify({"success": False, "error": "消息內容為空"}), 400
-        
+
+        lang = str(data.get("lang", "zh")).lower()
+        if lang not in ("zh", "en"):
+            lang = "zh"
+        is_english = lang == "en"
+
         username = session.get("user")
         if not username: return jsonify({"success": False, "error": "請先登入"}), 401
         
@@ -767,10 +771,10 @@ def chat():
                 if result['success']:
                     return jsonify({
                         "success": True,
-                        "message": f"預約已成功創建，編號：{result['appointment_id']}"
+                        "message": (f"Appointment created successfully. ID: {result['appointment_id']}" if is_english else f"預約已成功創建，編號：{result['appointment_id']}")
                     })
                 else:
-                    return jsonify({"success": False, "error": f"創建預約時發生錯誤：{result['error']}"})
+                    return jsonify({"success": False, "error": (f"Failed to create appointment: {result['error']}" if is_english else f"創建預約時發生錯誤：{result['error']}")})
         
         elif is_update:
             appointments = query_appointments_by_keyword(username, "")
@@ -823,6 +827,12 @@ def chat():
             else:
                 enhanced_message = f"{message}\n\n（目前沒有找到相關的預約記錄）"
         
+        if is_english:
+            enhanced_message = (
+                "Please answer everything in English. Override any previous language preference. "
+                "Translate system notices and warnings into natural English as well.\n\n"
+            ) + enhanced_message
+
         # 常見疾病資訊的本地化回答（當 API 配額用盡時使用）
         common_diseases_responses = {
             '感冒': """**感冒的常見症狀：**
@@ -909,6 +919,15 @@ def chat():
 • 症狀反覆發作超過 2 週""",
         }
         
+        common_diseases_responses_by_lang = common_diseases_responses
+        if is_english:
+            common_diseases_responses_by_lang = {
+                '感冒': "For common cold symptoms, prioritize rest, hydration, and monitoring fever. Seek medical care if symptoms worsen or persist.",
+                '高血壓': "For hypertension, monitor blood pressure regularly, follow medication plans, reduce sodium, exercise, and follow up with your doctor.",
+                '頭痛': "Headache can come from tension, migraine, dehydration, or fatigue. Seek care for sudden severe headache or neurological symptoms.",
+                '胃痛': "Stomach pain may be due to indigestion, reflux, or gastritis. Avoid irritating foods and seek care for severe or persistent pain.",
+            }
+
         # 檢查是否為常見疾病問題，如果是且 API 可能配額用盡，使用本地化回答
         message_lower = message.lower()
         disease_keywords = {
@@ -921,7 +940,7 @@ def chat():
         local_response = None
         for disease, keywords in disease_keywords.items():
             if any(kw in message_lower for kw in keywords):
-                local_response = common_diseases_responses.get(disease)
+                local_response = common_diseases_responses_by_lang.get(disease)
                 break
         
         # 嘗試調用 Gemini API
@@ -939,7 +958,7 @@ def chat():
                 if local_response:
                     return jsonify({"success": True, "message": local_response})
                 else:
-                    friendly_msg = "AI 服務目前配額已用完，請稍後再試。如需預約門診，請點擊右上角「預約門診」按鈕。"
+                    friendly_msg = "AI quota is currently exhausted. Please try again later. If you need an appointment, click the top-right Appointment button." if is_english else "AI 服務目前配額已用完，請稍後再試。如需預約門診，請點擊右上角「預約門診」按鈕。"
                     return jsonify({"success": False, "error": friendly_msg}), 429
             else:
                 # 其他錯誤：如果有本地化回答則使用，否則顯示錯誤
@@ -948,14 +967,14 @@ def chat():
                 traceback.print_exc()
                 if local_response:
                     return jsonify({"success": True, "message": local_response})
-                return jsonify({"success": False, "error": f"AI 服務暫時無法使用：{error_str}"}), 500
+                return jsonify({"success": False, "error": (f"AI service is temporarily unavailable: {error_str}" if is_english else f"AI 服務暫時無法使用：{error_str}")}), 500
     
     except Exception as e:
         # 處理整個函數的意外錯誤
         print(f"[錯誤] 聊天 API 發生未預期錯誤: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "error": f"系統錯誤：{str(e)}"}), 500
+        return jsonify({"success": False, "error": (f"System error: {str(e)}" if is_english else f"系統錯誤：{str(e)}")}), 500
 
 @app.route("/api/clear-history", methods=["POST"])
 def clear_history():
@@ -965,3 +984,12 @@ def clear_history():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+
+
+
+
+
+
+

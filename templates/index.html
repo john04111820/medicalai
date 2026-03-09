@@ -19,6 +19,13 @@
         {% if username %}
         <!-- 有登入：顯示名字 + 預約連結 + 登出按鈕 -->
         <span class="user-welcome">嗨，{{ username }}</span>
+        <button id="langToggleBtn" class="nav-btn info" title="Switch Language">
+            <i class="fa-solid fa-language"></i> <span>EN</span>
+        </button>
+        <!-- 新增：語音播報開關 -->
+        <button id="voiceToggleBtn" class="nav-btn voice-btn" title="切換語音播報">
+            <i class="fa-solid fa-volume-xmark"></i> <span>語音關閉</span>
+        </button>
         <a href="/appointment" class="nav-btn success">
             <i class="fa-solid fa-calendar-plus"></i> <span>預約門診</span>
         </a>
@@ -31,6 +38,9 @@
         </button>
         <a href="/logout" class="nav-btn logout-btn">登出</a>
         {% else %}
+        <button id="langToggleBtn" class="nav-btn info" title="Switch Language">
+            <i class="fa-solid fa-language"></i> <span>EN</span>
+        </button>
         <!-- 沒登入：顯示登入按鈕，連結指向 /login -->
         <a href="/login" class="nav-btn login-btn">登入</a>
         {% endif %}
@@ -222,6 +232,177 @@
         const recordingStatus = document.getElementById('recordingStatus');
         const processingStatus = document.getElementById('processingStatus');
         const processingText = document.getElementById('processingText');
+        const langToggleBtn = document.getElementById('langToggleBtn');
+        const urlParams = new URLSearchParams(window.location.search);
+        const selectedLang = urlParams.get('lang') === 'en' ? 'en' : 'zh';
+        const i18n = {
+            zh: {
+                title: '醫療AI聊天助手',
+                welcomeHtml: '您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。<br>我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。<br>如需預約門診，請點擊右上角的「預約門診」按鈕，或直接告訴我您的需求。',
+                placeholder: '請輸入您的問題或點擊麥克風錄音...',
+                recording: '正在錄音中...',
+                processing: '正在處理...',
+                aiThinking: '正在思考...',
+                aiReplying: 'AI 正在回應...',
+                typing: '正在輸入...',
+                clearConfirm: '確定要清除所有對話記錄嗎？',
+                clearErrorLog: '清除對話歷史失敗:',
+                micAccessErrorLog: '無法訪問麥克風:',
+                micAccessErrorAlert: '無法訪問麥克風，請確認已授予麥克風權限',
+                transcribeServerError: '服務器錯誤',
+                transcribeNoText: '未能識別到語音內容，請重試',
+                transcribeFail: '轉錄失敗: ',
+                unknownError: '未知錯誤',
+                audioSendErrorLog: '發送音頻時發生錯誤:',
+                audioSendErrorAlert: '發送音頻時發生錯誤',
+                genericError: '抱歉，發生錯誤：',
+                sendError: '抱歉，發送消息時發生錯誤，請重試。',
+                browserNotSupported: '您的瀏覽器不支持錄音功能，請使用 Chrome、Edge 或 Firefox 瀏覽器',
+                seniorPrompt: '請按按鈕說話',
+                seniorClickHint: '點擊開始 / 停止',
+                seniorListening: '正在聽您說話...',
+                seniorWelcome: '您好！我是您的語音小幫手。\n請問今天有什麼我可以幫您的？',
+                modeSenior: '<i class="fa-solid fa-person-cane"></i> <span>長輩模式</span>',
+                modeNormal: '<i class="fa-solid fa-mobile-screen"></i> <span>一般模式</span>',
+                voiceOn: '<i class="fa-solid fa-volume-high"></i> <span>語音開啟</span>',
+                voiceOff: '<i class="fa-solid fa-volume-xmark"></i> <span>語音關閉</span>',
+                langToggle: '<i class="fa-solid fa-language"></i> <span>EN</span>',
+                langToggleTitle: '切換語言'
+            },
+            en: {
+                title: 'Medical AI Chat Assistant',
+                welcomeHtml: 'Hello! I am your Medical AI assistant focused on healthcare consultation.<br>I can help with symptom checks, disease information, and medication precautions.<br>If you need an appointment, click the top-right "Appointment" button or tell me directly.',
+                placeholder: 'Type your question or tap the microphone...',
+                recording: 'Recording...',
+                processing: 'Processing...',
+                aiThinking: 'Thinking...',
+                aiReplying: 'AI is replying...',
+                typing: 'Typing...',
+                clearConfirm: 'Clear all chat history?',
+                clearErrorLog: 'Failed to clear chat history:',
+                micAccessErrorLog: 'Cannot access microphone:',
+                micAccessErrorAlert: 'Cannot access microphone. Please grant microphone permission.',
+                transcribeServerError: 'Server error',
+                transcribeNoText: 'No speech detected. Please try again.',
+                transcribeFail: 'Transcription failed: ',
+                unknownError: 'Unknown error',
+                audioSendErrorLog: 'Error sending audio:',
+                audioSendErrorAlert: 'Error sending audio.',
+                genericError: 'Sorry, an error occurred: ',
+                sendError: 'Sorry, there was an error sending your message. Please try again.',
+                browserNotSupported: 'Your browser does not support recording. Please use Chrome, Edge, or Firefox.',
+                seniorPrompt: 'Press the button to speak',
+                seniorClickHint: 'Tap to start / stop',
+                seniorListening: 'Listening...',
+                seniorWelcome: 'Hello! I am your voice assistant.\nHow can I help you today?',
+                modeSenior: '<i class="fa-solid fa-person-cane"></i> <span>Senior Mode</span>',
+                modeNormal: '<i class="fa-solid fa-mobile-screen"></i> <span>Normal Mode</span>',
+                voiceOn: '<i class="fa-solid fa-volume-high"></i> <span>Voice On</span>',
+                voiceOff: '<i class="fa-solid fa-volume-xmark"></i> <span>Voice Off</span>',
+                langToggle: '<i class="fa-solid fa-language"></i> <span>中文</span>',
+                langToggleTitle: 'Switch Language'
+            }
+        };
+        const t = (key) => (i18n[selectedLang] && i18n[selectedLang][key]) || i18n.zh[key] || key;
+
+        function getWelcomeCardHtml() {
+            return `
+                <div class="welcome-message">
+                    <div class="message-avatar" style="background: var(--primary-color); margin: 0 auto 15px;">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <p style="text-align: center; color: var(--light-text);">${t('welcomeHtml')}</p>
+                </div>
+            `;
+        }
+
+        function applyLanguageUI() {
+            document.documentElement.lang = selectedLang === 'en' ? 'en' : 'zh-Hant';
+
+            const title = document.querySelector('.main-container h1');
+            if (title) title.textContent = t('title');
+            textInput.placeholder = t('placeholder');
+            const recordingText = recordingStatus.querySelector('span');
+            if (recordingText) recordingText.textContent = t('recording');
+            processingText.textContent = t('processing');
+            seniorStatusText.textContent = t('seniorPrompt');
+            const seniorHint = document.querySelector('.senior-footer div:last-child');
+            if (seniorHint) seniorHint.textContent = t('seniorClickHint');
+
+            const welcomeP = chatContainer.querySelector('.welcome-message p');
+            if (welcomeP) welcomeP.innerHTML = t('welcomeHtml');
+
+            if (modeToggleBtn) modeToggleBtn.innerHTML = t('modeSenior');
+            if (voiceToggleBtn) voiceToggleBtn.innerHTML = t('voiceOff');
+            if (langToggleBtn) {
+                langToggleBtn.innerHTML = t('langToggle');
+                langToggleBtn.title = t('langToggleTitle');
+            }
+
+            const appointmentLink = document.querySelector('a[href="/appointment"]');
+            const appointmentListLink = document.querySelector('a[href="/appointment/list"]');
+            const appointmentBtn = appointmentLink ? appointmentLink.querySelector('span') : null;
+            const myAppointmentBtn = appointmentListLink ? appointmentListLink.querySelector('span') : null;
+            const loginBtn = document.querySelector('.login-btn');
+            const logoutBtn = document.querySelector('.logout-btn');
+            const logoText = document.querySelector('.logo-container span');
+            const logoHomeLink = document.querySelector('a.logo-container');
+
+            if (appointmentLink) appointmentLink.href = `/appointment?lang=${selectedLang}`;
+            if (appointmentListLink) appointmentListLink.href = `/appointment/list?lang=${selectedLang}`;
+            if (logoHomeLink) logoHomeLink.href = `/home?transition=from_splash&lang=${selectedLang}`;
+
+            if (selectedLang === 'en') {
+                if (appointmentBtn) appointmentBtn.textContent = 'Appointment';
+                if (myAppointmentBtn) myAppointmentBtn.textContent = 'My Appointments';
+                if (loginBtn) loginBtn.textContent = 'Login';
+                if (logoutBtn) logoutBtn.textContent = 'Logout';
+                if (logoText) logoText.textContent = 'Medi Hospital';
+
+                const exampleLabelSpans = document.querySelectorAll('.example-label span');
+                if (exampleLabelSpans[0]) exampleLabelSpans[0].textContent = 'Appointment Examples';
+                if (exampleLabelSpans[1]) exampleLabelSpans[1].textContent = 'Common Disease Info';
+
+                const infoBtns = document.querySelectorAll('.appointment-info-btn');
+                if (infoBtns[0]) infoBtns[0].innerHTML = '<i class="fa-solid fa-stethoscope"></i> How to book an appointment?';
+                if (infoBtns[1]) infoBtns[1].innerHTML = '<i class="fa-solid fa-clock"></i> Book for tomorrow';
+                if (infoBtns[2]) infoBtns[2].innerHTML = '<i class="fa-solid fa-child"></i> What to prepare?';
+
+                const diseaseBtns = document.querySelectorAll('.example-btn:not(.appointment-info-btn)');
+                if (diseaseBtns[0]) { diseaseBtns[0].innerHTML = '<i class="fa-solid fa-head-side-cough"></i> Cold symptoms'; diseaseBtns[0].setAttribute('data-example', 'What are common cold symptoms and what should I do?'); }
+                if (diseaseBtns[1]) { diseaseBtns[1].innerHTML = '<i class="fa-solid fa-heartbeat"></i> Hypertension care'; diseaseBtns[1].setAttribute('data-example', 'What should I pay attention to with hypertension? Any diet advice?'); }
+                if (diseaseBtns[2]) { diseaseBtns[2].innerHTML = '<i class="fa-solid fa-head-side-virus"></i> Headache causes'; diseaseBtns[2].setAttribute('data-example', 'What might cause headaches and when should I see a doctor?'); }
+                if (diseaseBtns[3]) { diseaseBtns[3].innerHTML = '<i class="fa-solid fa-stomach"></i> Stomach pain care'; diseaseBtns[3].setAttribute('data-example', 'How can I relieve stomach pain and when should I seek care?'); }
+
+                const modalTitle = document.querySelector('#appointmentModal h2');
+                if (modalTitle) modalTitle.textContent = 'Quick Booking';
+                const labels = document.querySelectorAll('#modalAppointmentForm label');
+                if (labels[0]) labels[0].textContent = 'Patient ID (Optional)';
+                if (labels[1]) labels[1].innerHTML = 'Patient Name <span style="color:red">*</span>';
+                if (labels[2]) labels[2].innerHTML = 'Phone Number <span style="color:red">*</span>';
+                if (labels[3]) labels[3].innerHTML = 'Department <span style="color:red">*</span>';
+                if (labels[4]) labels[4].innerHTML = 'Doctor <span style="color:red">*</span>';
+                if (labels[5]) labels[5].innerHTML = 'Date <span style="color:red">*</span>';
+                if (labels[6]) labels[6].innerHTML = 'Time <span style="color:red">*</span>';
+                if (labels[7]) labels[7].textContent = 'Symptoms (Optional)';
+                const patientId = document.querySelector('#modalAppointmentForm input[name="patient_id"]');
+                const patientName = document.querySelector('#modalAppointmentForm input[name="patient_name"]');
+                const patientPhone = document.querySelector('#modalAppointmentForm input[name="patient_phone"]');
+                const symptoms = document.querySelector('#modalAppointmentForm textarea[name="symptoms"]');
+                if (patientId) patientId.placeholder = 'e.g. P12345';
+                if (patientName) patientName.placeholder = 'Enter patient name';
+                if (patientPhone) patientPhone.placeholder = 'Enter phone number';
+                if (symptoms) symptoms.placeholder = 'Briefly describe symptoms';
+                const deptDefault = document.querySelector('#modalDepartment option[value=""]');
+                if (deptDefault) deptDefault.textContent = 'Select department';
+                const doctorDefault = document.querySelector('#modalDoctor option[value=""]');
+                if (doctorDefault) doctorDefault.textContent = 'Select department first';
+                const submitBtn = document.querySelector('#modalAppointmentForm button[type="submit"]');
+                const cancelBtn = document.getElementById('cancelModalBtn');
+                if (submitBtn) submitBtn.textContent = 'Submit';
+                if (cancelBtn) cancelBtn.textContent = 'Cancel';
+            }
+        }
 
         let mediaRecorder = null;
         let audioChunks = [];
@@ -229,7 +410,7 @@
         let isLoadingHistory = false;
 
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert('您的瀏覽器不支持錄音功能，請使用 Chrome、Edge 或 Firefox 瀏覽器');
+            alert(t('browserNotSupported')); 
         }
 
         sendButton.addEventListener('click', sendMessage);
@@ -249,27 +430,16 @@
         });
 
         clearButton.addEventListener('click', async () => {
-            if (confirm('確定要清除所有對話記錄嗎？')) {
+            if (confirm(t('clearConfirm'))) {
                 try {
                     const response = await fetch('/api/clear-history', {
                         method: 'POST'
                     });
                     // Client side clear regardless of server support for this specific endpoint in this version
                     localStorage.removeItem('chatHistory');
-                    chatContainer.innerHTML = `
-                             <div class="welcome-message">
-                                <div class="message-avatar" style="background: var(--primary-color); margin: 0 auto 15px;">
-                                    <i class="fa-solid fa-robot"></i>
-                                </div>
-                                <p style="text-align: center; color: var(--light-text);">
-                                    您好！我是醫療AI助手，專注於提供醫療相關的諮詢服務。<br>
-                                    我可以幫助您解答症狀評估、疾病資訊、用藥注意事項等醫療問題。<br>
-                                    如需預約門診，請點擊右上角的「預約門診」按鈕，或直接告訴我您的需求。
-                                </p>
-                            </div>
-                        `;
+                    chatContainer.innerHTML = getWelcomeCardHtml();
                 } catch (error) {
-                    console.error('清除對話歷史失敗:', error);
+                    console.error(t('clearErrorLog'), error);
                     // Fallback clear
                     localStorage.removeItem('chatHistory');
                     location.reload();
@@ -278,8 +448,18 @@
         });
 
         window.addEventListener('DOMContentLoaded', () => {
+            applyLanguageUI();
             loadChatHistory();
         });
+
+        if (langToggleBtn) {
+            langToggleBtn.addEventListener('click', () => {
+                const nextLang = selectedLang === 'en' ? 'zh' : 'en';
+                const params = new URLSearchParams(window.location.search);
+                params.set('lang', nextLang);
+                window.location.href = window.location.pathname + '?' + params.toString();
+            });
+        };
 
         micButton.addEventListener('click', async () => {
             if (!isRecording) {
@@ -309,8 +489,8 @@
                     recordingStatus.style.display = 'flex';
 
                 } catch (error) {
-                    console.error('無法訪問麥克風:', error);
-                    alert('無法訪問麥克風，請確認已授予麥克風權限');
+                    console.error(t('micAccessErrorLog'), error);
+                    alert(t('micAccessErrorAlert')); 
                 }
             } else {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -345,14 +525,14 @@
                         textInput.value = newText;
                         await sendMessage();
                     } else {
-                        alert('未能識別到語音內容，請重試');
+                        alert(t('transcribeNoText')); 
                     }
                 } else {
-                    alert('轉錄失敗: ' + (data.error || '未知錯誤'));
+                    alert(t('transcribeFail') + (data.error || t('unknownError')));
                 }
             } catch (error) {
-                console.error('發送音頻時發生錯誤:', error);
-                alert('發送音頻時發生錯誤');
+                console.error(t('audioSendErrorLog'), error);
+                alert(t('audioSendErrorAlert')); 
             } finally {
                 processingStatus.style.display = 'none';
             }
@@ -389,19 +569,19 @@
             textInput.value = '';
             textInput.style.height = 'auto'; // Reset height
 
-            const aiMessageElement = addMessageToChat('assistant', '正在思考...', true);
+            const aiMessageElement = addMessageToChat('assistant', t('aiThinking'), true);
 
             textInput.disabled = true;
             sendButton.disabled = true;
             micButton.disabled = true;
-            processingText.textContent = 'AI 正在回應...';
+            processingText.textContent = t('aiReplying');
             processingStatus.style.display = 'flex';
 
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify({ message: message, lang: selectedLang })
                 });
 
                 const data = await response.json();
@@ -410,11 +590,11 @@
                 if (data.success && data.message) {
                     addMessageToChat('assistant', data.message);
                 } else {
-                    addMessageToChat('assistant', '抱歉，發生錯誤：' + (data.error || '未知錯誤'));
+                    addMessageToChat('assistant', t('genericError') + (data.error || t('unknownError')));
                 }
             } catch (error) {
                 aiMessageElement.remove();
-                addMessageToChat('assistant', '抱歉，發送消息時發生錯誤，請重試。');
+                addMessageToChat('assistant', t('sendError')); 
             } finally {
                 textInput.disabled = false;
                 sendButton.disabled = false;
@@ -487,7 +667,7 @@
                         <i class="fa-solid fa-robot"></i>
                     </div>
                     <div class="message-content">
-                        <div class="message-text">${isTyping ? '<span class="typing-indicator">正在輸入...</span>' : escapeHtml(content)}</div>
+                        <div class="message-text">${isTyping ? `<span class="typing-indicator">${t('typing')}</span>` : escapeHtml(content)}</div>
                         <div class="message-time">${messageTime}</div>
                     </div>
                 `;
@@ -502,6 +682,11 @@
             if (!isTyping && !skipSave && !isLoadingHistory) {
                 saveChatHistory();
             }
+            
+            // 如果是 AI 的訊息，且不是正在打字中，也不是在載入歷史紀錄，且開啟了語音：
+            if (role === 'assistant' && !isTyping && !isLoadingHistory && isVoiceEnabled) {
+                speakText(content);
+            }
 
             return messageDiv;
         }
@@ -513,7 +698,7 @@
         }
 
         function getCurrentTime() {
-            return new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+            return new Date().toLocaleTimeString(selectedLang === 'en' ? 'en-US' : 'zh-TW', { hour: '2-digit', minute: '2-digit' });
         }
 
         const appointmentInfoContent = {
@@ -521,11 +706,16 @@
             'tomorrow-booking': `**預約明天門診**\n\n請輸入「預約明天」，或點擊右上角按鈕選擇明天的日期。\n\n**營業時間**\n• 早班：09:00 - 15:00\n• 午班：15:00 - 21:00`,
             'preparation': `**預約需要準備什麼？**\n\n1. **病患姓名**\n2. **聯絡電話**\n3. **想要看的科別與醫師**\n4. **預約日期與時間**`
         };
+        const appointmentInfoContentEn = {
+            'how-to-book': `**How to book an appointment?**\n\nYou can book in two ways:\n\n**Method 1: Quick form**\n1. Click the top-right Appointment button\n2. Fill in required information\n3. Click Submit to finish booking\n\n**Method 2: AI chat**\nType "I want to book an appointment" and the form will open automatically.`,
+            'tomorrow-booking': `**Book for tomorrow**\n\nYou can type "book for tomorrow" or use the appointment form to pick tomorrow's date.\n\n**Clinic Hours**\n• Morning: 09:00 - 15:00\n• Afternoon: 15:00 - 21:00`,
+            'preparation': `**What should I prepare?**\n\n1. **Patient name**\n2. **Phone number**\n3. **Department and doctor**\n4. **Date and time**`
+        };
 
         document.querySelectorAll('.appointment-info-btn').forEach(button => {
             button.addEventListener('click', function () {
                 const infoType = this.getAttribute('data-info-type');
-                const content = appointmentInfoContent[infoType];
+                const content = selectedLang === 'en' ? appointmentInfoContentEn[infoType] : appointmentInfoContent[infoType];
                 if (content) addMessageToChat('assistant', content);
             });
         });
@@ -557,10 +747,10 @@
         function closeAppointmentModal() { appointmentModal.style.display = 'none'; }
 
         function populateModalDoctors(dept, preset) {
-            modalDoctor.innerHTML = '<option value="">' + '請選擇醫師' + '</option>';
+            modalDoctor.innerHTML = '<option value="">' + (selectedLang === 'en' ? 'Select doctor' : '請選擇醫師') + '</option>';
             const list = doctorOptions[dept] || [];
             list.forEach(item => {
-                const shiftLabel = item.shift === 'morning' ? '早班 09:00-15:00' : '午班 15:00-21:00';
+                const shiftLabel = item.shift === 'morning' ? (selectedLang === 'en' ? 'Morning 09:00-15:00' : '早班 09:00-15:00') : (selectedLang === 'en' ? 'Afternoon 15:00-21:00' : '午班 15:00-21:00');
                 const opt = document.createElement('option');
                 opt.value = item.doctor_name;
                 opt.textContent = `${item.doctor_name}（${shiftLabel}）`;
@@ -578,12 +768,14 @@
 
         function openScheduleModal(dept) {
             const list = doctorOptions[dept] || [];
-            scheduleTitle.textContent = `${dept} — 醫師時刻表`;
+            scheduleTitle.textContent = selectedLang === 'en' ? `${dept} — Doctor Schedule` : `${dept} — 醫師時刻表`;
             if (!list.length) {
-                scheduleBody.innerHTML = '<p style="color:#666;">目前沒有該科別的醫師資料。</p>';
+                scheduleBody.innerHTML = selectedLang === 'en'
+                    ? '<p style="color:#666;">No doctor data available for this department.</p>'
+                    : '<p style="color:#666;">目前沒有該科別的醫師資料。</p>';
             } else {
                 const rows = list.map(item => {
-                    const shiftLabel = item.shift === 'morning' ? '早班 09:00-15:00' : '午班 15:00-21:00';
+                    const shiftLabel = item.shift === 'morning' ? (selectedLang === 'en' ? 'Morning 09:00-15:00' : '早班 09:00-15:00') : (selectedLang === 'en' ? 'Afternoon 15:00-21:00' : '午班 15:00-21:00');
                     return `<div style="padding:10px 0; border-bottom:1px solid #eee;">
                         <div style="font-weight:600;">${item.doctor_name}</div>
                         <div style="color:#555;">${shiftLabel}</div>
@@ -608,28 +800,26 @@
             e.preventDefault();
             const formData = new FormData(modalForm);
             try {
-                const response = await fetch('/appointment', { method: 'POST', body: formData });
+                formData.append('lang', selectedLang);
+                const response = await fetch(`/appointment?lang=${selectedLang}`, { method: 'POST', body: formData });
                 if (response.redirected) {
                     window.location = response.url;
                     return;
                 }
                 const text = await response.text();
-                // 簡單檢查返回內容是否包含成功訊息
-                if (text.includes('我的預約') || text.includes('預約成功')) {
-                    window.location = '/appointment/list';
+                if (text.includes('我的預約') || text.includes('預約成功') || text.includes('My Appointments') || text.includes('Appointment')) {
+                    window.location = `/appointment/list?lang=${selectedLang}`;
                 } else {
-                    // 如果還是返回 html (可能是有錯誤訊息), 從 text 中抓取 error
-                    alert('提交可能失敗，請確認表單或稍後再試');
+                    alert(selectedLang === 'en' ? 'Submission might have failed. Please verify the form and try again.' : '提交可能失敗，請確認表單或稍後再試');
                 }
             } catch (err) {
-                console.error('預約提交失敗:', err);
-                alert('預約提交失敗，請稍後再試');
+                console.error(selectedLang === 'en' ? 'Appointment submit failed:' : '預約提交失敗:', err);
+                alert(selectedLang === 'en' ? 'Appointment submission failed. Please try again later.' : '預約提交失敗，請稍後再試');
             }
         });
 
         // === 轉場效果邏輯 (Reveal) ===
         // 檢查 URL 參數 transition=from_splash
-        const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('transition') === 'from_splash') {
             const revealOverlay = document.getElementById('revealOverlay');
             // 確保一開始是白色的 (CSS 已預設 opacity: 0, 但我們需要 override 為 1 初始狀態,
@@ -670,12 +860,12 @@
             isSeniorMode = !isSeniorMode;
             if (isSeniorMode) {
                 bodyElement.classList.add('senior-mode');
-                modeToggleBtn.innerHTML = '<i class="fa-solid fa-mobile-screen"></i> <span>一般模式</span>';
+                modeToggleBtn.innerHTML = t('modeNormal');
                 // 進入長輩模式時，送出歡迎語音（模擬）或文字
-                addMessageToChat('assistant', '您好！我是您的語音小幫手。\n請問今天有什麼我可以幫您的？');
+                addMessageToChat('assistant', t('seniorWelcome'));
             } else {
                 bodyElement.classList.remove('senior-mode');
-                modeToggleBtn.innerHTML = '<i class="fa-solid fa-person-cane"></i> <span>長輩模式</span>';
+                modeToggleBtn.innerHTML = t('modeSenior');
             }
         });
 
@@ -694,12 +884,12 @@
                     if (isRec) {
                         bigMicBtn.classList.add('listening');
                         bigMicBtn.innerHTML = '<i class="fa-solid fa-square"></i>'; // 停止圖示
-                        seniorStatusText.textContent = "正在聽您說話...";
+                        seniorStatusText.textContent = t('seniorListening');
                         seniorStatusText.classList.add('listening-text');
                     } else {
                         bigMicBtn.classList.remove('listening');
                         bigMicBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-                        seniorStatusText.textContent = "請按按鈕說話";
+                        seniorStatusText.textContent = t('seniorPrompt');
                         seniorStatusText.classList.remove('listening-text');
                     }
                 }
@@ -707,7 +897,86 @@
         });
         observer.observe(micButton, { attributes: true });
 
+        // === 語音播報邏輯 (Web Speech API) ===
+        const voiceToggleBtn = document.getElementById('voiceToggleBtn');
+        let isVoiceEnabled = false;
+        let speechSynth = window.speechSynthesis;
+
+        voiceToggleBtn.addEventListener('click', () => {
+            isVoiceEnabled = !isVoiceEnabled;
+            if (isVoiceEnabled) {
+                voiceToggleBtn.classList.add('active');
+                voiceToggleBtn.innerHTML = t('voiceOn');
+                // 可選：開啟時播報一小段提示音
+                // speakText("語音播報已開啟"); 
+            } else {
+                voiceToggleBtn.classList.remove('active');
+                voiceToggleBtn.innerHTML = t('voiceOff');
+                stopSpeaking(); // 關閉時立即停止目前說話
+            }
+        });
+
+        // 停止之前的語音，在發送新問題、或關閉語音時調用
+        function stopSpeaking() {
+            if (speechSynth.speaking) {
+                speechSynth.cancel();
+            }
+        }
+
+        // 發佈語音
+        function speakText(text) {
+            if (!speechSynth) return;
+            
+            stopSpeaking(); // 唸新的一句前先停掉舊的
+
+            // 實作上偶爾 AI 會有星號 (Markdown) 或多餘符號，可以簡單清一下增進聽感
+            let cleanText = text.replace(/[*#_`]/g, '');
+
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = selectedLang === 'en' ? 'en-US' : 'zh-TW'; // 依語言切換語音
+            utterance.rate = 1.0;     // 語速
+            utterance.pitch = 1.0;    // 音調
+            
+            speechSynth.speak(utterance);
+        }
+
+        // 當按下發送或麥克風錄製完成發送時，應該停止目前正在說的話
+        // 我們把 stopSpeaking 加在 sendMessage 最前面：
+        const originalSendMessage = sendMessage;
+        sendMessage = async function() {
+            stopSpeaking();
+            await originalSendMessage.apply(this, arguments);
+        };
+
     </script>
 </body>
 
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
