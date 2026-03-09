@@ -215,13 +215,17 @@ def save_gemini_api_key_to_env(api_key):
     with open(env_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines).rstrip() + '\n')
 
+def is_set_api_key_command():
+    """判斷是否執行設定 API key 的命令。"""
+    args = sys.argv[1:]
+    return "--set-api-key" in args or "set-key" in args
 def resolve_gemini_api_key():
     """優先讀取環境變數；若本機互動執行且未設定，則命令列詢問。"""
     key = (os.getenv("GEMINI_API_KEY") or "").strip()
     if key:
         return key
 
-    if "--set-api-key" in sys.argv:
+    if is_set_api_key_command():
         return ""
 
     if __name__ == "__main__" and sys.stdin and sys.stdin.isatty():
@@ -238,7 +242,7 @@ def resolve_gemini_api_key():
 def init_gemini_model():
     global gemini_model
 
-    if "--set-api-key" in sys.argv:
+    if is_set_api_key_command():
         return
 
     api_key = resolve_gemini_api_key()
@@ -1052,10 +1056,11 @@ def clear_history():
 
 
 if __name__ == "__main__":
-    if "--set-api-key" in sys.argv:
+    if is_set_api_key_command():
         handle_set_api_key_command()
     else:
         app.run(debug=True)
+
 
 
 
