@@ -321,6 +321,36 @@
             transform: skewX(-20deg);
             animation: scan 3s infinite;
         }
+        .lang-selector {
+            margin-top: 1rem;
+            display: none;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .lang-selector.active {
+            display: flex;
+        }
+
+        .lang-btn {
+            background: transparent;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            border-radius: 9999px;
+            padding: 0.8rem 1.4rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .lang-btn:hover {
+            border-color: #2dd4bf;
+            color: #ccfbf1;
+            transform: translateY(-2px);
+            box-shadow: 0 0 20px rgba(20, 184, 166, 0.2);
+        }
 
         @keyframes scan {
             0% {
@@ -442,13 +472,18 @@
         </div>
 
         <!-- 啟動按鈕 -->
-        <a href="javascript:void(0)" onclick="startConsultation()" class="start-btn">
+        <a href="javascript:void(0)" id="startConsultationBtn" onclick="startConsultation()" class="start-btn">
             <span>開始諮詢</span>
             <div class="icon-circle">
                 <i class="fa-solid fa-arrow-right"></i>
             </div>
             <div class="btn-scan"></div>
         </a>
+
+        <div id="langSelector" class="lang-selector">
+            <button type="button" class="lang-btn" onclick="chooseLanguage('zh')">中文 (Chinese)</button>
+            <button type="button" class="lang-btn" onclick="chooseLanguage('en')">English</button>
+        </div>
 
         <!-- 底部版權 -->
         <div class="footer">
@@ -487,6 +522,14 @@
         });
 
         function startConsultation() {
+            const startBtn = document.getElementById('startConsultationBtn');
+            const langSelector = document.getElementById('langSelector');
+
+            if (startBtn) startBtn.style.display = 'none';
+            if (langSelector) langSelector.classList.add('active');
+        }
+
+        function chooseLanguage(lang) {
             // 1. Start Storm
             const stormContainer = document.getElementById('stormContainer');
             const whiteoutOverlay = document.getElementById('whiteoutOverlay');
@@ -510,10 +553,14 @@
 
             // 3. Redirect when whiteout is mostly done
             setTimeout(() => {
-                window.location.href = '/home?transition=from_splash';
+                window.location.href = `/home?transition=from_splash&lang=${encodeURIComponent(lang)}`;
             }, 1800);
         }
     </script>
 </body>
 
 </html>
+
+
+
+

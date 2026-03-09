@@ -886,3 +886,36 @@ body.senior-mode {
     opacity: 1;
 }
 
+/* =========================================================================
+   Voice Toggle Button
+   ========================================================================= */
+.voice-btn {
+    background-color: var(--card-bg, #fff);
+    color: var(--text-color, #333);
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    padding: 8px 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.voice-btn:hover {
+    background-color: #f8f9fa;
+    border-color: #ccc;
+    transform: translateY(-1px);
+}
+
+.voice-btn.active {
+    background-color: var(--primary-color, #5563DE);
+    color: white;
+    border-color: var(--primary-color, #5563DE);
+}
+
+.voice-btn.active:hover {
+    background-color: var(--primary-hover, #3c4ab0);
+}
