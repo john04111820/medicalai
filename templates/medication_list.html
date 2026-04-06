@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用藥追蹤</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="top-right-nav">
+        <a href="{{ url_for('profile') }}" class="nav-btn user-profile-btn"><i class="fa-solid fa-circle-user"></i><span>{{ username }}</span></a>
+        <a href="{{ url_for('index') }}" class="nav-btn home-btn"><i class="fa-solid fa-house"></i><span>首頁</span></a>
+        <a href="{{ url_for('appointment_list') }}" class="nav-btn info"><i class="fa-solid fa-calendar-check"></i><span>預約列表</span></a>
+        <a href="{{ url_for('medication') }}" class="nav-btn success"><i class="fa-solid fa-plus"></i><span>新增用藥</span></a>
+        <a href="{{ url_for('logout') }}" class="nav-btn logout-btn">登出</a>
+    </div>
+
+    <a href="{{ url_for('index') }}" class="logo-container">
+        <i class="fa-solid fa-hospital"></i>
+        <span>Medi Hospital</span>
+    </a>
+
+    <div class="page-container" style="max-width: 1220px;">
+        <h1><i class="fa-solid fa-pills"></i> 每日用藥追蹤</h1>
+
+        {% if accessible_owners and accessible_owners|length > 1 %}
+        <div style="background:#f7f9fc;border:1px solid #e5ebf5;border-radius:14px;padding:14px 16px;margin-bottom:18px;color:#465066;">
+            <strong>可管理帳號：</strong> {{ accessible_owners|join('、') }}
+        </div>
+        {% endif %}
+
+        {% if success %}
+        <div style="background:#d4edda;color:#155724;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #c3e6cb;">
+            <i class="fa-solid fa-circle-check"></i> {{ success }}
+        </div>
+        {% endif %}
+        {% if error %}
+        <div style="background:#f8d7da;color:#721c24;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #f5c6cb;">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px;">
+            <div style="background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:18px;">
+                <div style="color:#6c757d;">啟用中的用藥</div>
+                <div style="font-size:2rem;font-weight:700;color:var(--primary-color);">{{ summary.active_count }}</div>
+            </div>
+            <div style="background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:18px;">
+                <div style="color:#6c757d;">今日提醒次數</div>
+                <div style="font-size:2rem;font-weight:700;color:var(--info-color);">{{ summary.today_reminders }}</div>
+            </div>
+            <div style="background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:18px;">
+                <div style="color:#6c757d;">已完成服藥</div>
+                <div style="font-size:2rem;font-weight:700;color:var(--secondary-color);">{{ summary.taken_count }}</div>
+            </div>
+            <div style="background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:18px;">
+                <div style="color:#6c757d;">目前待提醒</div>
+                <div style="font-size:2rem;font-weight:700;color:var(--danger-color);">{{ summary.due_count }}</div>
+            </div>
+        </div>
+
+        <section style="background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:22px;margin-bottom:20px;">
+            <div style="display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;">
+                <div>
+                    <h2 style="margin-bottom:8px;"><i class="fa-solid fa-bell"></i> 今日提醒</h2>
+                    <div style="color:#6c757d;">{{ today }} 的用藥待辦與完成狀態</div>
+                </div>
+                <form method="GET" action="{{ url_for('medication_list') }}" style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <input type="text" name="keyword" value="{{ keyword }}" placeholder="搜尋藥品或頻率" style="padding:12px 14px;border:1px solid #ced4da;border-radius:8px;min-width:220px;">
+                    <button type="submit" class="btn btn-primary">搜尋</button>
+                </form>
+            </div>
+
+            {% if today_schedule %}
+            <div style="display:grid;gap:12px;margin-top:18px;">
+                {% for item in today_schedule %}
+                <div style="border:1px solid #e8edf5;border-radius:14px;padding:16px;background:#fcfdff;">
+                    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+                        <div>
+                            <div style="font-size:1.05rem;font-weight:700;">{{ item.reminder_time }} - {{ item.medication_name }}</div>
+                            <div style="color:#5f6b7a;margin-top:6px;">{{ item.dosage }} / {{ item.frequency }} / {{ item.target_label }}</div>
+                            <div style="margin-top:8px;">
+                                <span class="status-badge {% if item.status == 'taken' %}status-completed{% elif item.status == 'skipped' %}status-canceled{% elif item.status == 'due' %}status-pending{% else %}status-pending{% endif %}">
+                                    {% if item.status == 'taken' %}已服用{% elif item.status == 'skipped' %}已略過{% elif item.status == 'due' %}待提醒{% else %}尚未紀錄{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <form method="POST" action="{{ url_for('log_medication_status', medication_id=item.medication_id) }}">
+                                <input type="hidden" name="log_date" value="{{ today }}">
+                                <input type="hidden" name="reminder_time" value="{{ item.reminder_time }}">
+                                <input type="hidden" name="status" value="taken">
+                                <button type="submit" class="btn btn-primary" style="padding:10px 14px;">已服用</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('log_medication_status', medication_id=item.medication_id) }}">
+                                <input type="hidden" name="log_date" value="{{ today }}">
+                                <input type="hidden" name="reminder_time" value="{{ item.reminder_time }}">
+                                <input type="hidden" name="status" value="skipped">
+                                <button type="submit" class="btn btn-secondary" style="padding:10px 14px;background:#dc3545;">略過</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="padding:26px 0;color:#6c757d;">今天目前沒有需要追蹤的提醒，可先新增用藥計畫。</div>
+            {% endif %}
+        </section>
+
+        <section style="background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:22px;">
+            <h2><i class="fa-solid fa-table-list"></i> 用藥計畫總覽</h2>
+            {% if medications %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>藥品</th>
+                            <th>對象</th>
+                            <th>劑量 / 頻率</th>
+                            <th>提醒時間</th>
+                            <th>期間</th>
+                            <th>今日完成度</th>
+                            <th>安全資訊</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for med in medications %}
+                        <tr>
+                            <td>
+                                <strong>{{ med.medication_name }}</strong><br>
+                                <span style="color:#6c757d;font-size:0.9rem;">帳號：{{ med.owner_username }}</span>
+                            </td>
+                            <td>{{ med.target_label }}</td>
+                            <td>{{ med.dosage }}<br><span style="color:#6c757d;">{{ med.frequency }}</span></td>
+                            <td>{{ med.reminder_list|join('、') }}</td>
+                            <td>{{ med.start_date }}{% if med.end_date %}<br><span style="color:#6c757d;">到 {{ med.end_date }}</span>{% endif %}</td>
+                            <td>
+                                <span class="status-badge {% if med.status == 'active' %}status-completed{% else %}status-canceled{% endif %}">
+                                    {{ '進行中' if med.status == 'active' else '已封存' }}
+                                </span>
+                                <div style="margin-top:8px;color:#465066;">{{ med.today_taken_count }}/{{ med.daily_total }} 次</div>
+                                <div style="color:#6c757d;font-size:0.9rem;">{{ med.adherence_ratio }}%</div>
+                            </td>
+                            <td style="min-width:220px;">
+                                {% for info in med.safety_info %}
+                                <div style="margin-bottom:8px;color:#5f6b7a;">• {{ info }}</div>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                    <a href="{{ url_for('edit_medication', medication_id=med.id) }}" class="btn btn-primary" style="padding:8px 12px;background:var(--info-color);">編輯</a>
+                                    {% if med.status == 'active' %}
+                                    <a href="{{ url_for('archive_medication', medication_id=med.id) }}" class="btn btn-secondary" style="padding:8px 12px;background:#dc3545;" onclick="return confirm('確定封存這筆用藥計畫？');">封存</a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="text-align:center;padding:42px 20px;color:#6c757d;">
+                <i class="fa-regular fa-folder-open" style="font-size:3rem;margin-bottom:14px;"></i>
+                <p>目前沒有符合條件的用藥資料。</p>
+                <a href="{{ url_for('medication') }}" class="btn btn-primary" style="margin-top:12px;">立即新增用藥計畫</a>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>

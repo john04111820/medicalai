@@ -1,158 +1,165 @@
 <!DOCTYPE html>
-<html lang="{{ 'en' if lang == 'en' else 'zh-Hant' }}">
-
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% set is_en = (lang == 'en') %}
-    <title>{{ 'Appointment - Medi Hospital' if is_en else '預約門診 - 醫資醫院' }}</title>
+    <title>{{ 'Edit Appointment' if edit_mode else 'Book Appointment' }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
-
 <body>
-
     <div class="top-right-nav">
-        {% if username %}
-        <span class="user-welcome">{{ ('Hi, ' + username) if is_en else ('嗨，' + username) }}</span>
-        <a href="{{ url_for('index', lang=lang) }}" class="nav-btn home-btn">
-            <i class="fa-solid fa-house"></i> <span>{{ 'Home' if is_en else '回首頁' }}</span>
-        </a>
-        <a href="{{ url_for('appointment_list', lang=lang) }}" class="nav-btn info">
-            <i class="fa-solid fa-calendar-check"></i> <span>{{ 'My Appointments' if is_en else '我的預約' }}</span>
-        </a>
-        <a href="/logout" class="nav-btn logout-btn">{{ 'Logout' if is_en else '登出' }}</a>
-        {% else %}
-        <a href="/login" class="nav-btn login-btn">{{ 'Login' if is_en else '登入' }}</a>
-        {% endif %}
+        <a href="{{ url_for('profile') }}" class="nav-btn user-profile-btn"><i class="fa-solid fa-circle-user"></i><span>{{ username }}</span></a>
+        <a href="{{ url_for('index') }}" class="nav-btn home-btn"><i class="fa-solid fa-house"></i><span>首頁</span></a>
+        <a href="{{ url_for('appointment_list') }}" class="nav-btn info"><i class="fa-solid fa-calendar-check"></i><span>預約列表</span></a>
+        <a href="{{ url_for('medication_list') }}" class="nav-btn success"><i class="fa-solid fa-pills"></i><span>用藥追蹤</span></a>
+        <a href="{{ url_for('logout') }}" class="nav-btn logout-btn">登出</a>
     </div>
 
-    <a href="{{ url_for('index', lang=lang) }}" class="logo-container" title="{{ 'Back to Home' if is_en else '返回首頁' }}">
+    <a href="{{ url_for('index') }}" class="logo-container">
         <i class="fa-solid fa-hospital"></i>
-        <span>{{ 'Medi Hospital' if is_en else '醫資醫院' }}</span>
+        <span>Medi Hospital</span>
     </a>
 
     <div class="page-container">
-        {% if edit_mode %}
-        <h1><i class="fa-solid fa-pen-to-square"></i> {{ 'Edit Appointment' if is_en else '修改預約' }}</h1>
-        {% else %}
-        <h1><i class="fa-solid fa-calendar-plus"></i> {{ 'Book Appointment' if is_en else '預約門診' }}</h1>
-        {% endif %}
+        <h1>
+            <i class="fa-solid {{ 'fa-pen-to-square' if edit_mode else 'fa-calendar-plus' }}"></i>
+            {{ '編輯預約' if edit_mode else '建立預約' }}
+        </h1>
 
         {% if error %}
-        <div
-            style="background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #f5c6cb;">
+        <div style="background:#f8d7da;color:#721c24;padding:14px 16px;border-radius:10px;margin-bottom:18px;border:1px solid #f5c6cb;">
             <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
         </div>
         {% endif %}
 
-        <form method="POST" action="{{ url_for('edit_appointment', apt_id=apt_id, lang=lang) if edit_mode else url_for('appointment', lang=lang) }}">
-            <input type="hidden" name="lang" value="{{ lang }}">
+        <form method="POST" action="{{ url_for('edit_appointment', apt_id=apt_id) if edit_mode else url_for('appointment') }}">
+            <input type="hidden" name="lang" value="{{ lang or 'zh' }}">
+
+            <div style="background:#f7f9fc;border:1px solid #e7ebf3;border-radius:14px;padding:18px;margin-bottom:20px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label><i class="fa-solid fa-people-arrows"></i> 服務對象</label>
+                    <select name="target_profile" id="target_profile" required>
+                        {% for person in manageable_people %}
+                        <option value="{{ person.target_value }}"
+                            data-name="{{ person.patient_name }}"
+                            data-phone="{{ person.patient_phone }}"
+                            data-id="{{ person.patient_id }}"
+                            {% if form_data and form_data.target_profile == person.target_value %}selected{% endif %}>
+                            {{ person.label }} - {{ person.description }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <small style="display:block;margin-top:6px;color:#6c757d;">
+                        可直接替本人、長者、幼兒或已授權家庭帳號名下成員掛號。
+                    </small>
+                </div>
+            </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label><i class="fa-solid fa-user"></i> {{ 'Patient Name' if is_en else '病患姓名' }} <span style="color:red">*</span></label>
-                    <input type="text" name="patient_name" required placeholder="{{ 'Enter full name' if is_en else '請輸入真實姓名' }}"
-                        value="{{ form_data.patient_name if form_data else '' }}">
+                    <label>病患姓名</label>
+                    <input type="text" name="patient_name" id="patient_name" required value="{{ form_data.patient_name if form_data else '' }}">
                 </div>
                 <div class="form-group">
-                    <label><i class="fa-solid fa-phone"></i> {{ 'Phone Number' if is_en else '聯絡電話' }} <span style="color:red">*</span></label>
-                    <input type="tel" name="patient_phone" required placeholder="{{ 'Enter phone number' if is_en else '請輸入聯絡電話' }}"
-                        value="{{ form_data.patient_phone if form_data else '' }}">
+                    <label>聯絡電話</label>
+                    <input type="tel" name="patient_phone" id="patient_phone" required value="{{ form_data.patient_phone if form_data else '' }}">
                 </div>
             </div>
 
             <div class="form-group">
-                <label><i class="fa-regular fa-id-card"></i> {{ 'Patient ID (Optional)' if is_en else '病歷號（選填）' }}</label>
-                <input type="text" name="patient_id" placeholder="{{ 'e.g. P12345' if is_en else '如：P12345' }}"
-                    value="{{ form_data.patient_id if form_data else '' }}">
+                <label>病患身分證號 / 病歷號</label>
+                <input type="text" name="patient_id" id="patient_id" value="{{ form_data.patient_id if form_data else '' }}">
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label><i class="fa-solid fa-user-doctor"></i> {{ 'Department' if is_en else '科別' }} <span style="color:red">*</span></label>
-                    <select name="department" id="department" required onchange="updateDoctors()">
-                        <option value="">{{ 'Select department' if is_en else '請選擇科別' }}</option>
+                    <label>科別</label>
+                    <select name="department" id="department" required>
+                        <option value="">請選擇科別</option>
                         {% for dept in doctor_options.keys() %}
-                        <option value="{{ dept }}" {% if form_data and form_data.department==dept %}selected{% endif %}>
-                            {{ dept }}</option>
+                        <option value="{{ dept }}" {% if form_data and form_data.department == dept %}selected{% endif %}>{{ dept }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="form-group">
-                    <label><i class="fa-solid fa-user-md"></i> {{ 'Doctor' if is_en else '醫師' }} <span style="color:red">*</span></label>
-                    <select name="doctor_name" id="doctor_name" required>
-                        <option value="">{{ 'Select department first' if is_en else '請先選擇科別' }}</option>
-                    </select>
+                    <label>醫師</label>
+                    <select name="doctor_name" id="doctor_name" required></select>
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label><i class="fa-regular fa-calendar"></i> {{ 'Appointment Date' if is_en else '預約日期' }} <span style="color:red">*</span></label>
-                    <input type="date" name="appointment_date" min="{{ min_date }}" required
-                        value="{{ form_data.appointment_date if form_data else '' }}">
+                    <label>預約日期</label>
+                    <input type="date" name="appointment_date" min="{{ min_date }}" required value="{{ form_data.appointment_date if form_data else '' }}">
                 </div>
                 <div class="form-group">
-                    <label><i class="fa-regular fa-clock"></i> {{ 'Appointment Time' if is_en else '預約時間' }} <span style="color:red">*</span></label>
-                    <input type="time" name="appointment_time" required
-                        value="{{ form_data.appointment_time if form_data else '' }}">
-                    <small style="color: #6c757d; display: block; margin-top: 5px;">{{ 'Please choose a time between 09:00 and 21:00' if is_en else '請選擇 09:00 - 21:00 之間的時段' }}</small>
+                    <label>預約時間</label>
+                    <input type="time" name="appointment_time" required value="{{ form_data.appointment_time if form_data else '' }}">
+                    <small style="display:block;margin-top:6px;color:#6c757d;">建議時段 09:00 - 21:00</small>
                 </div>
             </div>
 
             <div class="form-group">
-                <label><i class="fa-solid fa-notes-medical"></i> {{ 'Symptoms (Optional)' if is_en else '症狀描述（選填）' }}</label>
-                <textarea name="symptoms" rows="3"
-                    placeholder="{{ 'Briefly describe symptoms or concerns...' if is_en else '請簡述您的症狀或就醫需求...' }}">{{ form_data.symptoms if form_data else '' }}</textarea>
+                <label>症狀或備註</label>
+                <textarea name="symptoms" rows="4" placeholder="簡述目前狀況、照護需求或掛號原因">{{ form_data.symptoms if form_data else '' }}</textarea>
             </div>
 
-            <div style="margin-top: 30px; display: flex; gap: 15px;">
-                <button type="submit" class="btn btn-primary">
-                    {% if edit_mode %}
-                    <i class="fa-solid fa-pen-to-square"></i> {{ 'Update Appointment' if is_en else '更新預約' }}
-                    {% else %}
-                    <i class="fa-solid fa-check"></i> {{ 'Confirm Appointment' if is_en else '確認預約' }}
-                    {% endif %}
-                </button>
-                <a href="{{ url_for('appointment_list', lang=lang) if edit_mode else url_for('index', lang=lang) }}" class="btn btn-secondary"
-                    style="text-decoration: none; width: auto; display: inline-block;">
-                    <i class="fa-solid fa-xmark"></i> {{ 'Cancel' if is_en else '取消' }}
-                </a>
+            <div style="display:flex;gap:14px;margin-top:28px;">
+                <button type="submit" class="btn btn-primary">{{ '儲存變更' if edit_mode else '確認預約' }}</button>
+                <a href="{{ url_for('appointment_list') if edit_mode else url_for('index') }}" class="btn btn-secondary" style="text-decoration:none;">取消</a>
             </div>
         </form>
     </div>
 
     <script>
-        const doctorOptions = {{ doctor_options| tojson | safe }};
-        const deptSelect = document.getElementById('department');
+        const doctorOptions = {{ doctor_options | tojson | safe }};
+        const targetSelect = document.getElementById('target_profile');
+        const departmentSelect = document.getElementById('department');
         const doctorSelect = document.getElementById('doctor_name');
-        const isEn = {{ 'true' if is_en else 'false' }};
+        const patientNameInput = document.getElementById('patient_name');
+        const patientPhoneInput = document.getElementById('patient_phone');
+        const patientIdInput = document.getElementById('patient_id');
+        const existingDoctor = "{{ form_data.doctor_name if form_data else '' }}";
 
-        const selectedDoctor = "{{ form_data.doctor_name if form_data else '' }}";
+        function populateDoctors() {
+            const dept = departmentSelect.value;
+            doctorSelect.innerHTML = '<option value="">請選擇醫師</option>';
+            (doctorOptions[dept] || []).forEach((doctor) => {
+                const option = document.createElement('option');
+                option.value = doctor.doctor_name;
+                option.textContent = `${doctor.doctor_name} (${doctor.shift === 'morning' ? '上午' : '下午'})`;
+                if (doctor.doctor_name === existingDoctor) {
+                    option.selected = true;
+                }
+                doctorSelect.appendChild(option);
+            });
+        }
 
-        function updateDoctors() {
-            const dept = deptSelect.value;
-            doctorSelect.innerHTML = `<option value="">${isEn ? 'Select doctor' : '請選擇醫師'}</option>`;
-
-            if (dept && doctorOptions[dept]) {
-                doctorOptions[dept].forEach(doc => {
-                    const option = document.createElement('option');
-                    option.value = doc.doctor_name;
-                    const shift = doc.shift === 'morning' ? (isEn ? 'Morning' : '早班') : (isEn ? 'Afternoon' : '午班');
-                    option.textContent = `${doc.doctor_name} (${shift})`;
-                    if (doc.doctor_name === selectedDoctor) {
-                        option.selected = true;
-                    }
-                    doctorSelect.appendChild(option);
-                });
+        function applyTargetPreset() {
+            const selectedOption = targetSelect.options[targetSelect.selectedIndex];
+            if (!selectedOption) return;
+            if (!patientNameInput.value.trim()) {
+                patientNameInput.value = selectedOption.dataset.name || '';
+            }
+            if (!patientPhoneInput.value.trim()) {
+                patientPhoneInput.value = selectedOption.dataset.phone || '';
+            }
+            if (!patientIdInput.value.trim()) {
+                patientIdInput.value = selectedOption.dataset.id || '';
             }
         }
 
-        if (deptSelect.value) {
-            updateDoctors();
-        }
+        targetSelect.addEventListener('change', () => {
+            patientNameInput.value = '';
+            patientPhoneInput.value = '';
+            patientIdInput.value = '';
+            applyTargetPreset();
+        });
+
+        departmentSelect.addEventListener('change', populateDoctors);
+        if (departmentSelect.value) populateDoctors();
+        applyTargetPreset();
     </script>
 </body>
-
 </html>

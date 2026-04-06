@@ -34,6 +34,14 @@ def get_db_connection():
         print(f"[錯誤] 資料庫連線失敗: {e}")
         return None
 
+def ensure_column(conn, table_name, column_name, column_definition):
+    """Add a column if it does not already exist."""
+    existing_columns = {
+        row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
+    if column_name not in existing_columns:
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+
 def init_db():
     """初始化 SQLite 資料庫表結構"""
     try:
@@ -47,6 +55,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS medical_appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username VARCHAR(100) NOT NULL,
+            owner_username VARCHAR(100),
+            profile_id INTEGER,
+            created_by_username VARCHAR(100),
             patient_id VARCHAR(50),
             patient_name VARCHAR(100) NOT NULL,
             patient_phone VARCHAR(20) NOT NULL,
@@ -61,9 +72,16 @@ def init_db():
         )
         """
         cursor.execute(create_table_sql)
+        ensure_column(conn, "medical_appointments", "owner_username", "owner_username VARCHAR(100)")
+        ensure_column(conn, "medical_appointments", "profile_id", "profile_id INTEGER")
+        ensure_column(conn, "medical_appointments", "created_by_username", "created_by_username VARCHAR(100)")
+        conn.execute("UPDATE medical_appointments SET owner_username = username WHERE owner_username IS NULL OR owner_username = ''")
+        conn.execute("UPDATE medical_appointments SET created_by_username = username WHERE created_by_username IS NULL OR created_by_username = ''")
         
         # 建立索引以加速查詢
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_username ON medical_appointments(username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_owner_username ON medical_appointments(owner_username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_profile_id ON medical_appointments(profile_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_appointment_date ON medical_appointments(appointment_date)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_patient_id ON medical_appointments(patient_id)")
 
@@ -117,13 +135,91 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS care_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_username VARCHAR(50) NOT NULL,
+            profile_name VARCHAR(100) NOT NULL,
+            relationship VARCHAR(50) DEFAULT '',
+            phone VARCHAR(20) DEFAULT '',
+            identity_id VARCHAR(20) DEFAULT '',
+            birth_date DATE,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_care_profiles_owner ON care_profiles(owner_username)")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS care_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            owner_username VARCHAR(50) NOT NULL,
+            linked_username VARCHAR(50) NOT NULL,
+            note VARCHAR(255) DEFAULT '',
+            status VARCHAR(20) DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(owner_username, linked_username)
+        )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_care_links_owner ON care_links(owner_username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_care_links_linked ON care_links(linked_username)")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS medications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username VARCHAR(100) NOT NULL,
+            owner_username VARCHAR(100),
+            profile_id INTEGER,
+            created_by_username VARCHAR(100),
+            medication_name VARCHAR(120) NOT NULL,
+            dosage VARCHAR(120) NOT NULL,
+            frequency VARCHAR(120) NOT NULL,
+            reminder_times VARCHAR(255) NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE,
+            instructions TEXT DEFAULT '',
+            precautions TEXT DEFAULT '',
+            status VARCHAR(20) DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        ensure_column(conn, "medications", "owner_username", "owner_username VARCHAR(100)")
+        ensure_column(conn, "medications", "profile_id", "profile_id INTEGER")
+        ensure_column(conn, "medications", "created_by_username", "created_by_username VARCHAR(100)")
+        ensure_column(conn, "medications", "instructions", "instructions TEXT DEFAULT ''")
+        ensure_column(conn, "medications", "precautions", "precautions TEXT DEFAULT ''")
+        conn.execute("UPDATE medications SET owner_username = username WHERE owner_username IS NULL OR owner_username = ''")
+        conn.execute("UPDATE medications SET created_by_username = username WHERE created_by_username IS NULL OR created_by_username = ''")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_medications_owner ON medications(owner_username)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_medications_profile ON medications(profile_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_medications_status ON medications(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_medications_start_date ON medications(start_date)")
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS medication_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            medication_id INTEGER NOT NULL,
+            owner_username VARCHAR(100) NOT NULL,
+            log_date DATE NOT NULL,
+            reminder_time VARCHAR(10) NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            note TEXT DEFAULT '',
+            created_by_username VARCHAR(100),
+            taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(medication_id, log_date, reminder_time)
+        )
+        """)
+        ensure_column(conn, "medication_logs", "owner_username", "owner_username VARCHAR(100)")
+        ensure_column(conn, "medication_logs", "note", "note TEXT DEFAULT ''")
+        ensure_column(conn, "medication_logs", "created_by_username", "created_by_username VARCHAR(100)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_medication_logs_med_date ON medication_logs(medication_id, log_date)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_medication_logs_owner ON medication_logs(owner_username)")
 
         # 植入預設 admin 帳號（若尚未存在）
         cursor.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'")
         if cursor.fetchone()[0] == 0:
             cursor.execute(
-                "INSERT INTO users (username, password_hash, name) VALUES (?, ?, ?)",
-                ('admin', generate_password_hash('1234'), '系統管理員')
+                "INSERT INTO users (username, password_hash, name, phone, identity_id) VALUES (?, ?, ?, ?, ?)",
+                ('admin', generate_password_hash('1234'), '系統管理員', '', '')
             )
             print("[成功] 預設 admin 帳號已建立")
 
@@ -174,6 +270,292 @@ def is_time_in_range(time_str, start="09:00", end="21:00"):
         return start_t <= t <= end_t
     except Exception:
         return False
+
+# === Medication Features ===
+@app.route("/medication", methods=["GET", "POST"])
+@login_required
+def medication():
+    username = session.get("user")
+    manageable_people = get_manageable_people(username)
+    default_target = request.args.get("target_profile") or (
+        manageable_people[0]["target_value"] if manageable_people else f"user:{username}"
+    )
+    default_start = datetime.now().strftime("%Y-%m-%d")
+    if request.method == "POST":
+        form = request.form
+        reminder_values = parse_reminder_times(form.get("reminder_times", ""))
+        required_fields = [
+            form.get("medication_name"),
+            form.get("dosage"),
+            form.get("frequency"),
+            form.get("start_date"),
+        ]
+        if not all(required_fields) or not reminder_values:
+            form_data = dict(form)
+            form_data["target_profile"] = form.get("target_profile", default_target)
+            return render_template(
+                "medication.html",
+                username=username,
+                manageable_people=manageable_people,
+                form_data=form_data,
+                error="請完整填寫藥品、劑量、頻率、開始日期與提醒時間",
+                edit_mode=False,
+            )
+
+        conn = get_db_connection()
+        if not conn:
+            return render_template(
+                "medication.html",
+                username=username,
+                manageable_people=manageable_people,
+                form_data=form,
+                error="Database connection failed",
+                edit_mode=False,
+            )
+        try:
+            resolved_target = resolve_manageable_target(username, form.get("target_profile"))
+            if not resolved_target:
+                raise ValueError("請選擇有效的用藥對象")
+            conn.execute(
+                """INSERT INTO medications
+                   (username, owner_username, profile_id, created_by_username, medication_name, dosage, frequency,
+                    reminder_times, start_date, end_date, instructions, precautions, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')""",
+                (
+                    resolved_target["owner_username"],
+                    resolved_target["owner_username"],
+                    resolved_target.get("profile_id"),
+                    username,
+                    form.get("medication_name", "").strip(),
+                    form.get("dosage", "").strip(),
+                    form.get("frequency", "").strip(),
+                    ",".join(reminder_values),
+                    form.get("start_date"),
+                    form.get("end_date") or None,
+                    form.get("instructions", "").strip(),
+                    form.get("precautions", "").strip(),
+                )
+            )
+            conn.commit()
+            return redirect(url_for("medication_list", success="用藥計畫已新增"))
+        except Exception as e:
+            form_data = dict(form)
+            form_data["target_profile"] = form.get("target_profile", default_target)
+            return render_template(
+                "medication.html",
+                username=username,
+                manageable_people=manageable_people,
+                form_data=form_data,
+                error=f"新增失敗：{e}",
+                edit_mode=False,
+            )
+        finally:
+            conn.close()
+
+    return render_template(
+        "medication.html",
+        username=username,
+        manageable_people=manageable_people,
+        form_data={"target_profile": default_target, "start_date": default_start},
+        edit_mode=False,
+    )
+
+@app.route("/medication/edit/<int:medication_id>", methods=["GET", "POST"])
+@login_required
+def edit_medication(medication_id):
+    username = session.get("user")
+    medication_item = get_medication_with_access(medication_id, username)
+    if not medication_item:
+        return redirect(url_for("medication_list", error="找不到這筆用藥資料"))
+
+    manageable_people = get_manageable_people(username)
+    target_value = (
+        f"profile:{medication_item['profile_id']}"
+        if medication_item.get("profile_id")
+        else f"user:{medication_item['owner_username']}"
+    )
+
+    if request.method == "POST":
+        form = request.form
+        reminder_values = parse_reminder_times(form.get("reminder_times", ""))
+        required_fields = [
+            form.get("medication_name"),
+            form.get("dosage"),
+            form.get("frequency"),
+            form.get("start_date"),
+        ]
+        if not all(required_fields) or not reminder_values:
+            form_data = dict(form)
+            form_data["target_profile"] = form.get("target_profile", target_value)
+            return render_template(
+                "medication.html",
+                username=username,
+                manageable_people=manageable_people,
+                form_data=form_data,
+                error="請完整填寫藥品、劑量、頻率、開始日期與提醒時間",
+                edit_mode=True,
+                medication_id=medication_id,
+            )
+
+        conn = get_db_connection()
+        if not conn:
+            return redirect(url_for("medication_list", error="Database connection failed"))
+        try:
+            resolved_target = resolve_manageable_target(username, form.get("target_profile"))
+            if not resolved_target:
+                raise ValueError("請選擇有效的用藥對象")
+            conn.execute(
+                """UPDATE medications
+                   SET username=?, owner_username=?, profile_id=?, created_by_username=?, medication_name=?, dosage=?,
+                       frequency=?, reminder_times=?, start_date=?, end_date=?, instructions=?, precautions=?,
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE id=?""",
+                (
+                    resolved_target["owner_username"],
+                    resolved_target["owner_username"],
+                    resolved_target.get("profile_id"),
+                    username,
+                    form.get("medication_name", "").strip(),
+                    form.get("dosage", "").strip(),
+                    form.get("frequency", "").strip(),
+                    ",".join(reminder_values),
+                    form.get("start_date"),
+                    form.get("end_date") or None,
+                    form.get("instructions", "").strip(),
+                    form.get("precautions", "").strip(),
+                    medication_id,
+                )
+            )
+            conn.commit()
+            return redirect(url_for("medication_list", success="用藥計畫已更新"))
+        except Exception as e:
+            form_data = dict(form)
+            form_data["target_profile"] = form.get("target_profile", target_value)
+            return render_template(
+                "medication.html",
+                username=username,
+                manageable_people=manageable_people,
+                form_data=form_data,
+                error=f"更新失敗：{e}",
+                edit_mode=True,
+                medication_id=medication_id,
+            )
+        finally:
+            conn.close()
+
+    form_data = dict(medication_item)
+    form_data["target_profile"] = target_value
+    form_data["reminder_times"] = ", ".join(medication_item.get("reminder_list", []))
+    return render_template(
+        "medication.html",
+        username=username,
+        manageable_people=manageable_people,
+        form_data=form_data,
+        edit_mode=True,
+        medication_id=medication_id,
+    )
+
+@app.route("/medication/archive/<int:medication_id>")
+@login_required
+def archive_medication(medication_id):
+    medication_item = get_medication_with_access(medication_id, session.get("user"))
+    if not medication_item:
+        return redirect(url_for("medication_list", error="找不到這筆用藥資料"))
+    conn = get_db_connection()
+    if not conn:
+        return redirect(url_for("medication_list", error="Database connection failed"))
+    try:
+        conn.execute(
+            "UPDATE medications SET status = 'inactive', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (medication_id,)
+        )
+        conn.commit()
+        return redirect(url_for("medication_list", success="用藥計畫已封存"))
+    finally:
+        conn.close()
+
+@app.route("/medication/log/<int:medication_id>", methods=["POST"])
+@login_required
+def log_medication_status(medication_id):
+    username = session.get("user")
+    medication_item = get_medication_with_access(medication_id, username)
+    if not medication_item:
+        return redirect(url_for("medication_list", error="找不到這筆用藥資料"))
+
+    log_date = request.form.get("log_date") or datetime.now().strftime("%Y-%m-%d")
+    reminder_time = request.form.get("reminder_time", "").strip()
+    status = request.form.get("status", "taken").strip().lower()
+    note = request.form.get("note", "").strip()
+    if reminder_time not in medication_item.get("reminder_list", []):
+        return redirect(url_for("medication_list", error="提醒時間格式不正確"))
+    if status not in {"taken", "skipped"}:
+        return redirect(url_for("medication_list", error="用藥狀態不正確"))
+
+    conn = get_db_connection()
+    if not conn:
+        return redirect(url_for("medication_list", error="Database connection failed"))
+    try:
+        conn.execute(
+            """INSERT INTO medication_logs
+               (medication_id, owner_username, log_date, reminder_time, status, note, created_by_username, taken_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(medication_id, log_date, reminder_time)
+               DO UPDATE SET status=excluded.status, note=excluded.note, created_by_username=excluded.created_by_username,
+                             taken_at=CURRENT_TIMESTAMP""",
+            (
+                medication_id,
+                medication_item["owner_username"],
+                log_date,
+                reminder_time,
+                status,
+                note,
+                username,
+            )
+        )
+        conn.commit()
+        message = "已標記為已服用" if status == "taken" else "已標記為略過"
+        return redirect(url_for("medication_list", success=message))
+    finally:
+        conn.close()
+
+@app.route("/medication/list")
+@login_required
+def medication_list():
+    username = session.get("user")
+    keyword = request.args.get("keyword", "").strip()
+    try:
+        medications = get_accessible_medications(username, keyword)
+        today_schedule = build_today_medication_schedule(medications)
+        summary = {
+            "active_count": sum(1 for med in medications if med.get("status") == "active"),
+            "today_reminders": len(today_schedule),
+            "taken_count": sum(1 for item in today_schedule if item["status"] == "taken"),
+            "due_count": sum(1 for item in today_schedule if item["status"] == "due"),
+        }
+        return render_template(
+            "medication_list.html",
+            username=username,
+            medications=medications,
+            today_schedule=today_schedule,
+            summary=summary,
+            keyword=keyword,
+            success=request.args.get("success"),
+            error=request.args.get("error"),
+            today=datetime.now().strftime("%Y-%m-%d"),
+            accessible_owners=get_accessible_owner_usernames(username),
+        )
+    except Exception as e:
+        return render_template(
+            "medication_list.html",
+            username=username,
+            medications=[],
+            today_schedule=[],
+            summary={"active_count": 0, "today_reminders": 0, "taken_count": 0, "due_count": 0},
+            keyword=keyword,
+            error=str(e),
+            today=datetime.now().strftime("%Y-%m-%d"),
+            accessible_owners=get_accessible_owner_usernames(username),
+        )
 
 # === AI 模型設定 ===
 medical_system_prompt = """你是一位專業的醫療AI助理，專門協助處理醫療相關問題和預約服務。
@@ -319,6 +701,352 @@ def get_user_by_username(username):
     finally:
         conn.close()
 
+def get_accessible_owner_usernames(username):
+    """Return owner accounts the current user can manage."""
+    conn = get_db_connection()
+    if not conn:
+        return [username]
+    try:
+        owner_usernames = {username}
+        rows = conn.execute(
+            """SELECT owner_username
+               FROM care_links
+               WHERE linked_username = ? AND status = 'active'""",
+            (username,)
+        ).fetchall()
+        owner_usernames.update(row["owner_username"] for row in rows)
+        return sorted(owner_usernames)
+    finally:
+        conn.close()
+
+def get_owner_linked_accounts(owner_username):
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        rows = conn.execute(
+            """SELECT cl.id, cl.linked_username, cl.note, cl.status, cl.created_at,
+                      u.name AS linked_name, u.phone AS linked_phone
+               FROM care_links cl
+               LEFT JOIN users u ON u.username = cl.linked_username
+               WHERE cl.owner_username = ?
+               ORDER BY cl.created_at DESC""",
+            (owner_username,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+def get_owner_care_profiles(owner_username):
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        rows = conn.execute(
+            """SELECT *
+               FROM care_profiles
+               WHERE owner_username = ?
+               ORDER BY created_at DESC, id DESC""",
+            (owner_username,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+def get_manageable_people(username):
+    """Build selectable booking targets for the current user."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        targets = []
+        owner_usernames = get_accessible_owner_usernames(username)
+        for owner_username in owner_usernames:
+            owner = conn.execute(
+                "SELECT username, name, phone, identity_id FROM users WHERE username = ?",
+                (owner_username,)
+            ).fetchone()
+            if owner:
+                owner = dict(owner)
+                owner_name = owner.get("name") or owner_username
+                targets.append({
+                    "target_value": f"user:{owner_username}",
+                    "target_type": "user",
+                    "owner_username": owner_username,
+                    "profile_id": None,
+                    "patient_name": owner_name,
+                    "patient_phone": owner.get("phone", ""),
+                    "patient_id": owner.get("identity_id", ""),
+                    "label": f"{owner_name}（本人）" if owner_username == username else f"{owner_name}（{owner_username} 本人）",
+                    "description": "我的帳號" if owner_username == username else f"由 {owner_username} 授權代辦"
+                })
+
+            profile_rows = conn.execute(
+                """SELECT id, owner_username, profile_name, relationship, phone, identity_id, birth_date, notes
+                   FROM care_profiles
+                   WHERE owner_username = ?
+                   ORDER BY created_at DESC, id DESC""",
+                (owner_username,)
+            ).fetchall()
+            for row in profile_rows:
+                profile = dict(row)
+                relationship = profile.get("relationship") or "家人"
+                targets.append({
+                    "target_value": f"profile:{profile['id']}",
+                    "target_type": "profile",
+                    "owner_username": owner_username,
+                    "profile_id": profile["id"],
+                    "patient_name": profile.get("profile_name", ""),
+                    "patient_phone": profile.get("phone", ""),
+                    "patient_id": profile.get("identity_id", ""),
+                    "relationship": relationship,
+                    "birth_date": profile.get("birth_date", ""),
+                    "notes": profile.get("notes", ""),
+                    "label": f"{profile.get('profile_name', '')}（{relationship}）",
+                    "description": "我的受照護對象" if owner_username == username else f"{owner_username} 家庭成員"
+                })
+        return targets
+    finally:
+        conn.close()
+
+def resolve_manageable_target(username, target_value):
+    targets = get_manageable_people(username)
+    target_map = {target["target_value"]: target for target in targets}
+    if target_value in target_map:
+        return target_map[target_value]
+    return target_map.get(f"user:{username}")
+
+def get_appointment_with_access(apt_id, username):
+    owner_usernames = get_accessible_owner_usernames(username)
+    placeholders = ",".join(["?"] * len(owner_usernames))
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        row = conn.execute(
+            f"""SELECT ma.*, cp.profile_name, cp.relationship
+                FROM medical_appointments ma
+                LEFT JOIN care_profiles cp ON cp.id = ma.profile_id
+                WHERE ma.id = ? AND COALESCE(ma.owner_username, ma.username) IN ({placeholders})""",
+            [apt_id] + owner_usernames
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+def get_accessible_appointments(username, keyword=""):
+    owner_usernames = get_accessible_owner_usernames(username)
+    placeholders = ",".join(["?"] * len(owner_usernames))
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        sql = f"""
+            SELECT ma.*, cp.profile_name, cp.relationship
+            FROM medical_appointments ma
+            LEFT JOIN care_profiles cp ON cp.id = ma.profile_id
+            WHERE COALESCE(ma.owner_username, ma.username) IN ({placeholders})
+        """
+        params = list(owner_usernames)
+        if keyword:
+            sql += """
+                AND (
+                    ma.patient_id LIKE ? OR
+                    ma.patient_name LIKE ? OR
+                    ma.patient_phone LIKE ?
+                )
+            """
+            params.extend([f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"])
+        sql += " ORDER BY ma.appointment_date DESC, ma.appointment_time DESC"
+        appointments = [dict(row) for row in conn.execute(sql, params).fetchall()]
+        for apt in appointments:
+            apt["owner_username"] = apt.get("owner_username") or apt.get("username")
+            apt["created_by_username"] = apt.get("created_by_username") or apt.get("username")
+            apt["booking_target"] = (
+                f"{apt.get('profile_name')} ({apt.get('relationship') or 'family'})"
+                if apt.get("profile_id")
+                else "Self"
+            )
+            apt["managed_for_other"] = apt["owner_username"] != username
+        return appointments
+    finally:
+        conn.close()
+
+def parse_reminder_times(reminder_times):
+    """Normalize reminder time text into sorted HH:MM values."""
+    if not reminder_times:
+        return []
+    values = []
+    for item in str(reminder_times).split(","):
+        cleaned = item.strip()
+        if not cleaned:
+            continue
+        try:
+            values.append(datetime.strptime(cleaned, "%H:%M").strftime("%H:%M"))
+        except ValueError:
+            continue
+    return sorted(set(values))
+
+def get_medication_safety_info(medication_name, precautions=""):
+    name = (medication_name or "").lower()
+    hints = []
+    safety_map = {
+        "metformin": "服用後若持續噁心、嘔吐或食慾下降，請盡快回診評估。",
+        "insulin": "注射胰島素後請留意低血糖，若冒冷汗、手抖或頭暈應立即補充糖分。",
+        "warfarin": "服用抗凝血藥期間若有不明瘀青、血尿或黑便，應儘速就醫。",
+        "aspirin": "阿斯匹靈與其他止痛消炎藥併用前請先詢問醫師，避免增加出血風險。",
+        "ibuprofen": "止痛消炎藥建議飯後服用，若胃痛或黑便請停止使用並就醫。",
+        "acetaminophen": "含普拿疼成分藥物避免重複服用，以免增加肝臟負擔。",
+        "amoxicillin": "抗生素請依療程完成，勿自行提前停藥。",
+        "antibiotic": "抗生素請依醫囑完成療程，不要因症狀改善就自行停藥。",
+        "steroid": "類固醇藥物通常不建議自行突然停用，需依醫囑調整。",
+        "prednisone": "類固醇通常不建議自行突然停用，若需停藥請先與醫師討論。",
+        "atorvastatin": "降血脂藥若合併明顯肌肉痠痛或尿色變深，請盡快就醫。",
+        "amlodipine": "降血壓藥可能造成頭暈，初期起身動作請放慢。 ",
+    }
+    for keyword, hint in safety_map.items():
+        if keyword in name:
+            hints.append(hint.strip())
+    if precautions:
+        hints.append(f"個別注意事項：{precautions}")
+    if not hints:
+        hints.append("首次使用新藥、出現紅疹、呼吸喘或明顯不適時，應停止自行加量並儘快聯繫醫師或藥師。")
+    return hints[:3]
+
+def get_medication_with_access(medication_id, username):
+    owner_usernames = get_accessible_owner_usernames(username)
+    placeholders = ",".join(["?"] * len(owner_usernames))
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        row = conn.execute(
+            f"""SELECT m.*, cp.profile_name, cp.relationship
+                FROM medications m
+                LEFT JOIN care_profiles cp ON cp.id = m.profile_id
+                WHERE m.id = ? AND COALESCE(m.owner_username, m.username) IN ({placeholders})""",
+            [medication_id] + owner_usernames
+        ).fetchone()
+        if not row:
+            return None
+        medication = dict(row)
+        medication["owner_username"] = medication.get("owner_username") or medication.get("username")
+        medication["created_by_username"] = medication.get("created_by_username") or medication.get("username")
+        medication["reminder_list"] = parse_reminder_times(medication.get("reminder_times"))
+        medication["target_label"] = (
+            f"{medication.get('profile_name')}（{medication.get('relationship') or '家人'}）"
+            if medication.get("profile_id")
+            else "自己"
+        )
+        medication["safety_info"] = get_medication_safety_info(
+            medication.get("medication_name"), medication.get("precautions", "")
+        )
+        return medication
+    finally:
+        conn.close()
+
+def get_medication_log_lookup(medication_ids, log_date):
+    if not medication_ids:
+        return {}
+    placeholders = ",".join(["?"] * len(medication_ids))
+    conn = get_db_connection()
+    if not conn:
+        return {}
+    try:
+        rows = conn.execute(
+            f"""SELECT medication_id, reminder_time, status, note, taken_at
+                FROM medication_logs
+                WHERE log_date = ? AND medication_id IN ({placeholders})""",
+            [log_date] + medication_ids
+        ).fetchall()
+        lookup = {}
+        for row in rows:
+            entry = dict(row)
+            lookup.setdefault(entry["medication_id"], {})[entry["reminder_time"]] = entry
+        return lookup
+    finally:
+        conn.close()
+
+def get_accessible_medications(username, keyword=""):
+    owner_usernames = get_accessible_owner_usernames(username)
+    placeholders = ",".join(["?"] * len(owner_usernames))
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        sql = f"""
+            SELECT m.*, cp.profile_name, cp.relationship
+            FROM medications m
+            LEFT JOIN care_profiles cp ON cp.id = m.profile_id
+            WHERE COALESCE(m.owner_username, m.username) IN ({placeholders})
+        """
+        params = list(owner_usernames)
+        if keyword:
+            sql += """
+                AND (
+                    m.medication_name LIKE ? OR
+                    m.dosage LIKE ? OR
+                    m.frequency LIKE ?
+                )
+            """
+            params.extend([f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"])
+        sql += " ORDER BY CASE WHEN m.status = 'active' THEN 0 ELSE 1 END, m.start_date DESC, m.id DESC"
+        medications = [dict(row) for row in conn.execute(sql, params).fetchall()]
+        today = datetime.now().strftime("%Y-%m-%d")
+        log_lookup = get_medication_log_lookup([med["id"] for med in medications], today)
+        for med in medications:
+            med["owner_username"] = med.get("owner_username") or med.get("username")
+            med["created_by_username"] = med.get("created_by_username") or med.get("username")
+            med["reminder_list"] = parse_reminder_times(med.get("reminder_times"))
+            med["target_label"] = (
+                f"{med.get('profile_name')}（{med.get('relationship') or '家人'}）"
+                if med.get("profile_id")
+                else "自己"
+            )
+            med["today_logs"] = log_lookup.get(med["id"], {})
+            med["today_taken_count"] = sum(1 for entry in med["today_logs"].values() if entry["status"] == "taken")
+            med["daily_total"] = len(med["reminder_list"])
+            med["adherence_ratio"] = (
+                round((med["today_taken_count"] / med["daily_total"]) * 100)
+                if med["daily_total"] else 0
+            )
+            med["safety_info"] = get_medication_safety_info(med.get("medication_name"), med.get("precautions", ""))
+        return medications
+    finally:
+        conn.close()
+
+def build_today_medication_schedule(medications):
+    today = datetime.now().strftime("%Y-%m-%d")
+    now_text = datetime.now().strftime("%H:%M")
+    schedule = []
+    for med in medications:
+        if med.get("status") != "active":
+            continue
+        end_date = med.get("end_date")
+        if end_date and end_date < today:
+            continue
+        start_date = med.get("start_date")
+        if start_date and start_date > today:
+            continue
+        for reminder_time in med.get("reminder_list", []):
+            log_entry = med.get("today_logs", {}).get(reminder_time)
+            state = log_entry["status"] if log_entry else "pending"
+            if state == "pending" and reminder_time < now_text:
+                state = "due"
+            schedule.append({
+                "medication_id": med["id"],
+                "medication_name": med["medication_name"],
+                "dosage": med["dosage"],
+                "frequency": med["frequency"],
+                "target_label": med["target_label"],
+                "owner_username": med["owner_username"],
+                "reminder_time": reminder_time,
+                "status": state,
+                "note": log_entry.get("note", "") if log_entry else "",
+            })
+    schedule.sort(key=lambda item: (item["reminder_time"], item["medication_name"]))
+    return schedule
+
 def mask_identity_id(identity_id):
     """遮碼身分證號，如 A123456789 -> A12***789"""
     if not identity_id or len(identity_id) < 6:
@@ -340,60 +1068,69 @@ def index():
 def cancel_appointment(apt_id):
     lang = get_request_lang()
     conn = get_db_connection()
-    # 檢查是否為該用戶的預約 We need to verify ownership
-    cursor = conn.execute("SELECT username FROM medical_appointments WHERE id = ?", (apt_id,))
-    apt = cursor.fetchone()
-    
-    if apt and apt['username'] == session.get('user'):
-        conn.execute("UPDATE medical_appointments SET status = 'canceled' WHERE id = ?", (apt_id,))
+    if not conn:
+        return redirect(url_for('appointment_list', error="Database connection failed", lang=lang))
+    try:
+        apt = get_appointment_with_access(apt_id, session.get('user'))
+        if not apt:
+            return redirect(url_for('appointment_list', error="You do not have access to this appointment", lang=lang))
+        conn.execute(
+            "UPDATE medical_appointments SET status = 'canceled', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (apt_id,)
+        )
         conn.commit()
+        return redirect(url_for('appointment_list', success="Appointment updated", lang=lang))
+    finally:
         conn.close()
-        return redirect(url_for('appointment_list', success="預約已成功取消", lang=lang))
-    
-    conn.close()
-    return redirect(url_for('appointment_list', error="無法取消該預約", lang=lang))
 
 @app.route("/appointment/edit/<int:apt_id>", methods=["GET", "POST"])
 @login_required
 def edit_appointment(apt_id):
     lang = get_request_lang()
+    apt = get_appointment_with_access(apt_id, session.get('user'))
+    if not apt:
+        return redirect(url_for('appointment_list', error="You do not have access to this appointment", lang=lang))
+
     conn = get_db_connection()
-    
-    # 檢查所有權
-    cursor = conn.execute("SELECT * FROM medical_appointments WHERE id = ?", (apt_id,))
-    apt = cursor.fetchone()
-    
-    if not apt or apt['username'] != session.get('user'):
-        conn.close()
-        return redirect(url_for('appointment_list', error="無法編輯該預約", lang=lang))
-        
     doctors_map = get_doctors_by_department()
     min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-    
+    manageable_people = get_manageable_people(session.get('user'))
+    target_value = f"profile:{apt['profile_id']}" if apt.get('profile_id') else f"user:{apt.get('owner_username') or apt.get('username')}"
+
     if request.method == "POST":
         form = request.form
-        
-        # 簡單驗證
-        if not all([form.get("patient_name"), form.get("patient_phone"), form.get("department"), 
+        if not all([form.get("patient_name"), form.get("patient_phone"), form.get("department"),
                     form.get("doctor_name"), form.get("appointment_date"), form.get("appointment_time")]):
-             conn.close()
-             return render_template("appointment.html", 
-                                  username=session.get('user'), 
-                                  lang=lang,
-                                  min_date=min_date,
-                                  doctor_options=doctors_map,
-                                  error="請填寫所有必填欄位",
-                                  form_data=form,
-                                  edit_mode=True,
-                                  apt_id=apt_id)
+            conn.close()
+            form_data = dict(form)
+            form_data["target_profile"] = form.get("target_profile", target_value)
+            return render_template(
+                "appointment.html",
+                username=session.get('user'),
+                lang=lang,
+                min_date=min_date,
+                doctor_options=doctors_map,
+                error="Please complete all required fields",
+                form_data=form_data,
+                edit_mode=True,
+                apt_id=apt_id,
+                manageable_people=manageable_people
+            )
 
         try:
-             conn.execute("""
-                UPDATE medical_appointments 
-                SET patient_id=?, patient_name=?, patient_phone=?, department=?, 
+            resolved_target = resolve_manageable_target(session.get('user'), form.get("target_profile"))
+            if not resolved_target:
+                raise ValueError("Invalid booking target")
+            conn.execute("""
+                UPDATE medical_appointments
+                SET username=?, owner_username=?, profile_id=?, created_by_username=?, patient_id=?, patient_name=?, patient_phone=?, department=?,
                     doctor_name=?, appointment_date=?, appointment_time=?, symptoms=?, updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
             """, (
+                resolved_target["owner_username"],
+                resolved_target["owner_username"],
+                resolved_target.get("profile_id"),
+                session.get('user'),
                 form.get("patient_id"),
                 form.get("patient_name"),
                 form.get("patient_phone"),
@@ -404,31 +1141,40 @@ def edit_appointment(apt_id):
                 form.get("symptoms"),
                 apt_id
             ))
-             conn.commit()
-             conn.close()
-             return redirect(url_for('appointment_list', success="預約已成功修改", lang=lang))
-        except Exception:
-             conn.close()
-             return render_template("appointment.html", 
-                                  username=session.get('user'), 
-                                  lang=lang,
-                                  min_date=min_date, 
-                                  doctor_options=doctors_map, 
-                                  error="修改失敗，請稍後再試",
-                                  form_data=form,
-                                  edit_mode=True,
-                                  apt_id=apt_id)
+            conn.commit()
+            return redirect(url_for('appointment_list', success="Appointment updated", lang=lang))
+        except Exception as e:
+            form_data = dict(form)
+            form_data["target_profile"] = form.get("target_profile", target_value)
+            return render_template(
+                "appointment.html",
+                username=session.get('user'),
+                lang=lang,
+                min_date=min_date,
+                doctor_options=doctors_map,
+                error=f"Update failed: {e}",
+                form_data=form_data,
+                edit_mode=True,
+                apt_id=apt_id,
+                manageable_people=manageable_people
+            )
+        finally:
+            conn.close()
 
     conn.close()
-    return render_template("appointment.html", 
-                         username=session.get('user'), 
-                         lang=lang,
-                         min_date=min_date, 
-                         doctor_options=doctors_map,
-                         form_data=apt,
-                         edit_mode=True,
-                         apt_id=apt_id)
-
+    form_data = dict(apt)
+    form_data["target_profile"] = target_value
+    return render_template(
+        "appointment.html",
+        username=session.get('user'),
+        lang=lang,
+        min_date=min_date,
+        doctor_options=doctors_map,
+        form_data=form_data,
+        edit_mode=True,
+        apt_id=apt_id,
+        manageable_people=manageable_people
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -483,10 +1229,9 @@ def logout():
 @app.route("/profile", methods=["GET", "POST"])
 @login_required
 def profile():
-    """個人資料頁：查看與編輯姓名、電話、身分證號。"""
     username = session.get("user")
-    success_msg = ""
-    error_msg = ""
+    success_msg = request.args.get("success", "")
+    error_msg = request.args.get("error", "")
 
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -499,13 +1244,13 @@ def profile():
                     (name, phone, username)
                 )
                 conn.commit()
-                success_msg = "資料更新成功"
+                success_msg = "Profile updated successfully"
             except Exception as e:
-                error_msg = f"更新失敗：{e}"
+                error_msg = f"Update failed: {e}"
             finally:
                 conn.close()
         else:
-            error_msg = "資料庫連線失敗"
+            error_msg = "Database connection failed"
 
     user = get_user_by_username(username) or {}
     masked_id = mask_identity_id(user.get('identity_id', ''))
@@ -515,31 +1260,149 @@ def profile():
         user=user,
         masked_id=masked_id,
         success=success_msg,
-        error=error_msg
+        error=error_msg,
+        care_profiles=get_owner_care_profiles(username),
+        linked_accounts=get_owner_linked_accounts(username),
+        accessible_owners=get_accessible_owner_usernames(username)
     )
 
-# === 預約功能 ===
+@app.route("/family/profile/add", methods=["POST"])
+@login_required
+def add_care_profile():
+    username = session.get("user")
+    form = request.form
+    conn = get_db_connection()
+    if not conn:
+        return redirect(url_for("profile", error="Database connection failed"))
+    try:
+        profile_name = form.get("profile_name", "").strip()
+        if not profile_name:
+            return redirect(url_for("profile", error="Please complete all required fields"))
+        conn.execute(
+            """INSERT INTO care_profiles (owner_username, profile_name, relationship, phone, identity_id, birth_date, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                username,
+                profile_name,
+                form.get("relationship", "").strip(),
+                form.get("phone", "").strip(),
+                form.get("identity_id", "").strip(),
+                form.get("birth_date", "").strip() or None,
+                form.get("notes", "").strip()
+            )
+        )
+        conn.commit()
+        return redirect(url_for("profile", success="Care recipient removed"))
+    finally:
+        conn.close()
+
+@app.route("/family/profile/delete/<int:profile_id>", methods=["POST"])
+@login_required
+def delete_care_profile(profile_id):
+    username = session.get("user")
+    conn = get_db_connection()
+    if not conn:
+        return redirect(url_for("profile", error="Database connection failed"))
+    try:
+        conn.execute(
+            "DELETE FROM care_profiles WHERE id = ? AND owner_username = ?",
+            (profile_id, username)
+        )
+        conn.execute(
+            "UPDATE medical_appointments SET profile_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE profile_id = ? AND owner_username = ?",
+            (profile_id, username)
+        )
+        conn.commit()
+        return redirect(url_for("profile", success="Care recipient removed"))
+    finally:
+        conn.close()
+
+@app.route("/family/link/add", methods=["POST"])
+@login_required
+def add_family_link():
+    username = session.get("user")
+    linked_username = request.form.get("linked_username", "").strip()
+    note = request.form.get("note", "").strip()
+    if not linked_username:
+        return redirect(url_for("profile", error="Please complete all required fields"))
+    if linked_username == username:
+        return redirect(url_for("profile", error="You cannot link your own account"))
+    linked_user = get_user_by_username(linked_username)
+    if not linked_user:
+        return redirect(url_for("profile", error="Database connection failed"))
+
+    conn = get_db_connection()
+    if not conn:
+        return redirect(url_for("profile", error="Database connection failed"))
+    try:
+        conn.execute(
+            """INSERT INTO care_links (owner_username, linked_username, note, status)
+               VALUES (?, ?, ?, 'active')
+               ON CONFLICT(owner_username, linked_username)
+               DO UPDATE SET note=excluded.note, status='active'""",
+            (username, linked_username, note)
+        )
+        conn.commit()
+        return redirect(url_for("profile", success="Linked account authorized"))
+    finally:
+        conn.close()
+
+@app.route("/family/link/delete/<int:link_id>", methods=["POST"])
+@login_required
+def delete_family_link(link_id):
+    username = session.get("user")
+    conn = get_db_connection()
+    if not conn:
+        return redirect(url_for("profile", error="Database connection failed"))
+    try:
+        conn.execute(
+            "DELETE FROM care_links WHERE id = ? AND owner_username = ?",
+            (link_id, username)
+        )
+        conn.commit()
+        return redirect(url_for("profile", success="Linked account authorized"))
+    finally:
+        conn.close()
+
+# === Appointment Features ===
 @app.route("/appointment", methods=["GET", "POST"])
 @login_required
 def appointment():
     lang = get_request_lang()
     min_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     doctors_map = get_doctors_by_department()
+    manageable_people = get_manageable_people(session.get("user"))
+    default_target = request.args.get("target_profile") or (manageable_people[0]["target_value"] if manageable_people else f"user:{session.get('user')}")
     if request.method == "POST":
         form = request.form
         conn = get_db_connection()
         if not conn:
-            return render_template("appointment.html", username=session.get("user"), lang=lang,
-                                 error="無法連線到資料庫", form_data=form, min_date=min_date, doctor_options=doctors_map)
+            return render_template(
+                "appointment.html",
+                username=session.get("user"),
+                lang=lang,
+                error="Database connection failed",
+                form_data=form,
+                min_date=min_date,
+                doctor_options=doctors_map,
+                manageable_people=manageable_people
+            )
 
         try:
-            sql = """INSERT INTO medical_appointments 
-                    (username, patient_id, patient_name, patient_phone, department, doctor_name, 
-                        appointment_date, appointment_time, symptoms, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')"""
+            resolved_target = resolve_manageable_target(session.get("user"), form.get("target_profile"))
+            if not resolved_target:
+                raise ValueError("Please choose a valid service target")
+
+            sql = """INSERT INTO medical_appointments
+                    (username, owner_username, profile_id, created_by_username, patient_id, patient_name, patient_phone, department, doctor_name,
+                     appointment_date, appointment_time, symptoms, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')"""
             symptoms = form.get("symptoms", "").strip() or None
             patient_id = form.get("patient_id", "").strip() or None
             conn.execute(sql, (
+                resolved_target["owner_username"],
+                resolved_target["owner_username"],
+                resolved_target.get("profile_id"),
                 session.get("user"),
                 patient_id,
                 form["patient_name"],
@@ -551,33 +1414,40 @@ def appointment():
                 symptoms
             ))
             conn.commit()
-            success_msg = "Appointment created successfully!" if lang == 'en' else "預約成功！"
+            success_msg = "Appointment created successfully!" if lang == 'en' else "Appointment created"
             return redirect(url_for("appointment_list", success=success_msg, lang=lang))
         except Exception as e:
-            print(f"資料庫寫入錯誤: {e}")
-            return render_template("appointment.html", username=session.get("user"), lang=lang,
-                                 error=f"資料庫錯誤: {str(e)}", form_data=form, min_date=min_date,
-                                 doctor_options=doctors_map)
+            form_data = dict(form)
+            form_data["target_profile"] = form.get("target_profile", default_target)
+            return render_template(
+                "appointment.html",
+                username=session.get("user"),
+                lang=lang,
+                error=f"Appointment failed: {str(e)}",
+                form_data=form_data,
+                min_date=min_date,
+                doctor_options=doctors_map,
+                manageable_people=manageable_people
+            )
         finally:
             conn.close()
-    return render_template("appointment.html", username=session.get("user"), lang=lang, min_date=min_date, doctor_options=doctors_map)
+    return render_template(
+        "appointment.html",
+        username=session.get("user"),
+        lang=lang,
+        min_date=min_date,
+        doctor_options=doctors_map,
+        manageable_people=manageable_people,
+        form_data={"target_profile": default_target}
+    )
 
 @app.route("/appointment/list")
 @login_required
 def appointment_list():
     lang = normalize_lang(request.args.get('lang', 'zh'))
-    conn = get_db_connection()
-    if not conn:
-        return render_template("appointment_list.html", username=session.get("user"), lang=lang,
-                             appointments=[], error="無法連線到資料庫")
+    username = session.get("user")
     try:
-        username = session.get("user")
-        cursor = conn.execute(
-            "SELECT * FROM medical_appointments WHERE username=? ORDER BY appointment_date DESC, appointment_time DESC",
-            (username,)
-        )
-        appointments = [dict(row) for row in cursor.fetchall()]
-
+        appointments = get_accessible_appointments(username)
         for apt in appointments:
             if apt.get('appointment_date') and not isinstance(apt['appointment_date'], str):
                 apt['appointment_date'] = apt['appointment_date'].strftime('%Y-%m-%d')
@@ -585,58 +1455,183 @@ def appointment_list():
                 apt['appointment_time'] = apt['appointment_time'].strftime('%H:%M')
             if apt.get('created_at') and not isinstance(apt['created_at'], str):
                 apt['created_at'] = apt['created_at'].strftime('%Y-%m-%d %H:%M:%S')
-
-        return render_template("appointment_list.html", username=username, lang=lang,
-                             appointments=appointments, success=request.args.get("success"))
+        return render_template(
+            "appointment_list.html",
+            username=username,
+            lang=lang,
+            appointments=appointments,
+            success=request.args.get("success"),
+            error=request.args.get("error"),
+            accessible_owners=get_accessible_owner_usernames(username)
+        )
     except Exception as e:
-        return render_template("appointment_list.html", username=session.get("user"), lang=lang,
-                             appointments=[], error=str(e))
+        return render_template(
+            "appointment_list.html",
+            username=username,
+            lang=lang,
+            appointments=[],
+            error=str(e),
+            accessible_owners=get_accessible_owner_usernames(username)
+        )
+
+# === AI 模型設定 ===
+medical_system_prompt = """你是一位專業的醫療AI助理，專門協助處理醫療相關問題和預約服務。
+
+重要規則：
+1. 所有回答必須使用繁體中文
+2. 專注於醫療健康相關內容
+3. 提供專業、準確、友善的醫療建議
+4. 當用戶詢問預約資訊時，你可以查詢資料庫獲取相關資訊
+5. 當用戶想要預約或修改預約時，你可以協助處理
+6. 對於非醫療問題，禮貌地引導用戶詢問醫療相關問題
+
+你可以執行的功能：
+
+【查詢預約】
+當用戶詢問預約資訊時，系統會自動查詢資料庫並提供相關記錄，你可以根據這些資訊回答用戶。
+
+【創建預約】
+當用戶想要預約門診時，你需要收集以下資訊：
+- 病歷號（選填）
+- 病患姓名（必填）
+- 聯絡電話（必填）
+- 科別（必填，如：內科、外科、兒科等）
+- 醫師姓名（必填）
+- 預約日期（必填，必須是未來日期）
+- 預約時間（必填）
+- 症狀描述（選填）
+
+如果資訊不完整，請友善地詢問缺少的資訊。
+
+【修改預約】
+當用戶想要修改預約時，你需要：
+1. 先找到要修改的預約（根據病歷號、姓名或電話）
+2. 確認要修改的欄位
+3. 更新預約資訊
+
+請始終以專業、友善的態度回答，並確保所有資訊準確無誤。"""
+
+gemini_model = None
+
+def save_gemini_api_key_to_env(api_key):
+    """將 GEMINI_API_KEY 寫入 .env（存在則覆蓋，不存在則新增）。"""
+    env_path = os.path.join(basedir, '.env')
+    new_line = f"GEMINI_API_KEY={api_key}"
+
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            lines = f.read().splitlines()
+
+    updated = False
+    for i, line in enumerate(lines):
+        if line.startswith('GEMINI_API_KEY='):
+            lines[i] = new_line
+            updated = True
+            break
+
+    if not updated:
+        lines.append(new_line)
+
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines).rstrip() + '\n')
+
+def is_set_api_key_command():
+    """判斷是否執行設定 API key 的命令。"""
+    args = sys.argv[1:]
+    return "--set-api-key" in args or "set-key" in args
+def resolve_gemini_api_key():
+    """優先使用本次新輸入的 key；未輸入時才回退到既有設定。"""
+    if is_set_api_key_command():
+        return ""
+
+    if __name__ == "__main__" and sys.stdin and sys.stdin.isatty():
+        try:
+            user_key = input("請輸入 Gemini API Key（直接按 Enter 使用既有設定）: ").strip()
+            if user_key:
+                os.environ["GEMINI_API_KEY"] = user_key
+                return user_key
+        except EOFError:
+            pass
+
+    key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if key:
+        return key
+
+    return ""
+
+def init_gemini_model():
+    global gemini_model
+
+    if is_set_api_key_command():
+        return
+
+    api_key = resolve_gemini_api_key()
+
+    if not api_key:
+        print("[警告] 未找到 GEMINI_API_KEY，AI 聊天功能將無法使用")
+        return
+
+    try:
+        genai.configure(api_key=api_key)
+        gemini_model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=medical_system_prompt)
+        print("[成功] Gemini 醫療AI模型已初始化")
+    except Exception as e:
+        print(f"[錯誤] Gemini 模型初始化失敗: {e}")
+
+def handle_set_api_key_command():
+    """命令列指令：互動式輸入 API key 並寫入 .env。"""
+    if not (sys.stdin and sys.stdin.isatty()):
+        print("[錯誤] 目前不是互動式終端機，無法輸入 API key")
+        return
+
+    api_key = input("請輸入要儲存的 Gemini API Key: ").strip()
+    if not api_key:
+        print("[取消] 未輸入 API Key，未進行任何變更")
+        return
+
+    save_gemini_api_key_to_env(api_key)
+    os.environ["GEMINI_API_KEY"] = api_key
+    print("[成功] 已寫入 .env 的 GEMINI_API_KEY")
+
+init_gemini_model()
+
+whisper_model = None
+def get_whisper_model():
+    global whisper_model
+    if not whisper_model:
+        try:
+            print("[載入] 正在載入 Whisper 模型...")
+            whisper_model = whisper.load_model("medium")
+            print("[成功] Whisper 模型已載入")
+        except Exception as e:
+            print(f"[錯誤] Whisper 模型載入失敗: {e}")
+    return whisper_model
+
+def get_user_by_username(username):
+    """從 SQLite 查詢使用者。"""
+    conn = get_db_connection()
+    if not conn: return None
+    try:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        return dict(row) if row else None
     finally:
         conn.close()
 
-# === AI 輔助函數 ===
-
 def query_appointments_by_keyword(username, keyword=""):
-    """根據關鍵字查詢預約記錄（支援病歷號、姓名、電話）"""
-    conn = get_db_connection()
-    if not conn: return []
-    
+    """Query appointments the user can manage."""
     try:
-        if keyword:
-            cursor = conn.execute(
-                """SELECT * FROM medical_appointments 
-                   WHERE username = ? AND (
-                       patient_id LIKE ? OR 
-                       patient_name LIKE ? OR 
-                       patient_phone LIKE ?
-                   )
-                   ORDER BY appointment_date DESC, appointment_time DESC""",
-                (username, f'%{keyword}%', f'%{keyword}%', f'%{keyword}%')
-            )
-        else:
-            # 查詢所有預約
-            cursor = conn.execute(
-                """SELECT * FROM medical_appointments 
-                   WHERE username = ?
-                   ORDER BY appointment_date DESC, appointment_time DESC""",
-                (username,)
-            )
-        
-        appointments = [dict(row) for row in cursor.fetchall()]
-        
-        # 格式化日期時間
+        appointments = get_accessible_appointments(username, keyword)
         for apt in appointments:
             if apt.get('appointment_date') and not isinstance(apt['appointment_date'], str):
                 apt['appointment_date'] = apt['appointment_date'].strftime('%Y-%m-%d')
             if apt.get('appointment_time') and not isinstance(apt['appointment_time'], str):
                 apt['appointment_time'] = apt['appointment_time'].strftime('%H:%M')
-        
         return appointments
     except Exception as e:
-        print(f"[錯誤] 查詢預約記錄失敗: {e}")
+        print(f"[error] Failed to query appointments: {e}")
         return []
-    finally:
-        conn.close()
+
 
 def create_appointment_via_ai(username, appointment_data):
     """通過 AI 創建預約"""

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ '編輯用藥計畫' if edit_mode else '新增用藥計畫' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="top-right-nav">
+        <a href="{{ url_for('profile') }}" class="nav-btn user-profile-btn"><i class="fa-solid fa-circle-user"></i><span>{{ username }}</span></a>
+        <a href="{{ url_for('index') }}" class="nav-btn home-btn"><i class="fa-solid fa-house"></i><span>首頁</span></a>
+        <a href="{{ url_for('appointment_list') }}" class="nav-btn info"><i class="fa-solid fa-calendar-check"></i><span>預約列表</span></a>
+        <a href="{{ url_for('medication_list') }}" class="nav-btn success"><i class="fa-solid fa-pills"></i><span>用藥追蹤</span></a>
+        <a href="{{ url_for('logout') }}" class="nav-btn logout-btn">登出</a>
+    </div>
+
+    <a href="{{ url_for('index') }}" class="logo-container">
+        <i class="fa-solid fa-hospital"></i>
+        <span>Medi Hospital</span>
+    </a>
+
+    <div class="page-container" style="max-width: 1080px;">
+        <h1><i class="fa-solid fa-capsules"></i> {{ '編輯用藥計畫' if edit_mode else '新增用藥計畫' }}</h1>
+
+        {% if error %}
+        <div style="background:#f8d7da;color:#721c24;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #f5c6cb;">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="form-row" style="align-items: stretch;">
+            <section style="flex:1.2;background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:24px;">
+                <h2><i class="fa-solid fa-notes-medical"></i> 基本設定</h2>
+                <form method="POST" action="{{ url_for('edit_medication', medication_id=medication_id) if edit_mode else url_for('medication') }}">
+                    <div class="form-group">
+                        <label>照護對象</label>
+                        <select name="target_profile" required>
+                            {% for person in manageable_people %}
+                            <option value="{{ person.target_value }}" {% if form_data and form_data.target_profile == person.target_value %}selected{% endif %}>
+                                {{ person.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>藥品名稱</label>
+                            <input type="text" name="medication_name" required placeholder="例如 Metformin / 普拿疼"
+                                value="{{ form_data.medication_name if form_data else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>劑量</label>
+                            <input type="text" name="dosage" required placeholder="例如 500mg、1 顆"
+                                value="{{ form_data.dosage if form_data else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>服用頻率</label>
+                            <input type="text" name="frequency" required placeholder="例如 每日 2 次、三餐後"
+                                value="{{ form_data.frequency if form_data else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>提醒時間</label>
+                            <input type="text" name="reminder_times" required placeholder="例如 08:00, 13:00, 20:00"
+                                value="{{ form_data.reminder_times if form_data else '' }}">
+                            <small style="color:var(--light-text);">請用逗號分隔，系統會依時間排序並建立每日追蹤提醒。</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>開始日期</label>
+                            <input type="date" name="start_date" required value="{{ form_data.start_date if form_data else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>結束日期</label>
+                            <input type="date" name="end_date" value="{{ form_data.end_date if form_data else '' }}">
+                            <small style="color:var(--light-text);">若為長期慢性處方，可先留空。</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>服藥提醒</label>
+                        <textarea name="instructions" rows="3" placeholder="例如 飯後服用、睡前服用、搭配足量開水">{{ form_data.instructions if form_data else '' }}</textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>安全注意事項</label>
+                        <textarea name="precautions" rows="3" placeholder="例如 腎功能不佳請先詢問醫師、避免與酒精併用">{{ form_data.precautions if form_data else '' }}</textarea>
+                    </div>
+
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <button type="submit" class="btn btn-primary">{{ '儲存變更' if edit_mode else '建立用藥計畫' }}</button>
+                        <a href="{{ url_for('medication_list') }}" class="btn btn-secondary" style="text-decoration:none;">返回追蹤列表</a>
+                    </div>
+                </form>
+            </section>
+
+            <section style="flex:0.8;background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:24px;">
+                <h2><i class="fa-solid fa-shield-heart"></i> 使用說明</h2>
+                <div style="display:grid;gap:14px;">
+                    <div style="background:#f7f9fc;border-radius:14px;padding:16px;">
+                        <strong>1. 建立固定提醒</strong>
+                        <p style="margin-top:8px;color:#5f6b7a;">輸入一天內需要服藥的時間，系統會在追蹤頁形成今日待辦。</p>
+                    </div>
+                    <div style="background:#f7f9fc;border-radius:14px;padding:16px;">
+                        <strong>2. 每日勾選狀態</strong>
+                        <p style="margin-top:8px;color:#5f6b7a;">可對每個時段標記「已服用」或「略過」，即時掌握遵從度。</p>
+                    </div>
+                    <div style="background:#f7f9fc;border-radius:14px;padding:16px;">
+                        <strong>3. 補充安全資訊</strong>
+                        <p style="margin-top:8px;color:#5f6b7a;">把醫師或藥師提醒記錄下來，AI 小助手就能在日常管理中一起提醒。</p>
+                    </div>
+                    <div style="background:#fff7e6;border:1px solid #ffe1a6;border-radius:14px;padding:16px;color:#8a5a00;">
+                        <strong>提醒</strong>
+                        <p style="margin-top:8px;">若出現紅疹、呼吸困難、意識改變、持續嘔吐等異常反應，請不要只依賴系統記錄，應立即就醫。</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

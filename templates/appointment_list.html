@@ -1,52 +1,42 @@
 <!DOCTYPE html>
-<html lang="{{ 'en' if lang == 'en' else 'zh-Hant' }}">
-
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% set is_en = (lang == 'en') %}
-    <title>{{ 'My Appointments - Medi Hospital' if is_en else '我的預約記錄 - 醫資醫院' }}</title>
+    <title>預約列表</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
-
 <body>
-
     <div class="top-right-nav">
-        {% if username %}
-        <a href="/profile" class="nav-btn user-profile-btn" title="個人資料">
-            <i class="fa-solid fa-circle-user"></i> <span>{{ username }}</span>
-        </a>
-        <a href="{{ url_for('index', lang=lang) }}" class="nav-btn home-btn">
-            <i class="fa-solid fa-house"></i> <span>{{ 'Home' if is_en else '回首頁' }}</span>
-        </a>
-        <a href="{{ url_for('appointment', lang=lang) }}" class="nav-btn primary">
-            <i class="fa-solid fa-calendar-plus"></i> <span>{{ 'Book Appointment' if is_en else '預約門診' }}</span>
-        </a>
-        <a href="/logout" class="nav-btn logout-btn">{{ 'Logout' if is_en else '登出' }}</a>
-        {% else %}
-        <a href="/login" class="nav-btn login-btn">{{ 'Login' if is_en else '登入' }}</a>
-        {% endif %}
+        <a href="{{ url_for('profile') }}" class="nav-btn user-profile-btn"><i class="fa-solid fa-circle-user"></i><span>{{ username }}</span></a>
+        <a href="{{ url_for('index') }}" class="nav-btn home-btn"><i class="fa-solid fa-house"></i><span>首頁</span></a>
+        <a href="{{ url_for('appointment') }}" class="nav-btn success"><i class="fa-solid fa-calendar-plus"></i><span>新增預約</span></a>
+        <a href="{{ url_for('medication_list') }}" class="nav-btn info"><i class="fa-solid fa-pills"></i><span>用藥追蹤</span></a>
+        <a href="{{ url_for('logout') }}" class="nav-btn logout-btn">登出</a>
     </div>
 
-    <a href="{{ url_for('index', lang=lang) }}" class="logo-container" title="{{ 'Back to Home' if is_en else '返回首頁' }}">
+    <a href="{{ url_for('index') }}" class="logo-container">
         <i class="fa-solid fa-hospital"></i>
-        <span>{{ 'Medi Hospital' if is_en else '醫資醫院' }}</span>
+        <span>Medi Hospital</span>
     </a>
 
-    <div class="page-container" style="max-width: 1000px;">
-        <h1><i class="fa-solid fa-list-check"></i> {{ 'My Appointments' if is_en else '我的預約記錄' }}</h1>
+    <div class="page-container" style="max-width: 1200px;">
+        <h1><i class="fa-solid fa-list-check"></i> 可管理的預約</h1>
 
-        {% if success %}
-        <div
-            style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
-            <i class="fa-solid fa-circle-check"></i> {{ success }}
+        {% if accessible_owners and accessible_owners|length > 1 %}
+        <div style="background:#f7f9fc;border:1px solid #e5ebf5;border-radius:14px;padding:14px 16px;margin-bottom:18px;color:#465066;">
+            <strong>目前可管理帳號：</strong> {{ accessible_owners|join('、') }}
         </div>
         {% endif %}
 
+        {% if success %}
+        <div style="background:#d4edda;color:#155724;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #c3e6cb;">
+            <i class="fa-solid fa-circle-check"></i> {{ success }}
+        </div>
+        {% endif %}
         {% if error %}
-        <div
-            style="background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #f5c6cb;">
+        <div style="background:#f8d7da;color:#721c24;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #f5c6cb;">
             <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
         </div>
         {% endif %}
@@ -56,13 +46,15 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>{{ 'Date' if is_en else '日期' }}</th>
-                        <th>{{ 'Time' if is_en else '時間' }}</th>
-                        <th>{{ 'Department' if is_en else '科別' }}</th>
-                        <th>{{ 'Doctor' if is_en else '醫師' }}</th>
-                        <th>{{ 'Patient Name' if is_en else '病患姓名' }}</th>
-                        <th>{{ 'Status' if is_en else '狀態' }}</th>
-                        <th>{{ 'Actions' if is_en else '操作' }}</th>
+                        <th>日期</th>
+                        <th>時間</th>
+                        <th>就診對象</th>
+                        <th>病患姓名</th>
+                        <th>帳號歸屬</th>
+                        <th>建立者</th>
+                        <th>科別 / 醫師</th>
+                        <th>狀態</th>
+                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -70,34 +62,27 @@
                     <tr>
                         <td>{{ apt.appointment_date }}</td>
                         <td>{{ apt.appointment_time }}</td>
-                        <td>{{ apt.department }}</td>
-                        <td>{{ apt.doctor_name }}</td>
-                        <td>{{ apt.patient_name }}</td>
+                        <td>{{ apt.booking_target }}</td>
                         <td>
-                            <span class="status-badge 
-                                {% if apt.status == 'pending' %}status-pending
-                                {% elif apt.status == 'canceled' %}status-canceled
-                                {% else %}status-confirmed{% endif %}">
-                                {% if apt.status == 'pending' %}{{ 'Pending' if is_en else '待確認' }}
-                                {% elif apt.status == 'canceled' %}{{ 'Canceled' if is_en else '已取消' }}
-                                {% else %}{{ 'Confirmed' if is_en else '已確認' }}{% endif %}
+                            <strong>{{ apt.patient_name }}</strong><br>
+                            <span style="color:#6c757d;font-size:0.9rem;">{{ apt.patient_phone }}</span>
+                        </td>
+                        <td>{{ apt.owner_username }}</td>
+                        <td>{{ apt.created_by_username }}</td>
+                        <td>{{ apt.department }} / {{ apt.doctor_name }}</td>
+                        <td>
+                            <span class="status-badge {% if apt.status == 'pending' %}status-pending{% elif apt.status == 'canceled' %}status-canceled{% else %}status-confirmed{% endif %}">
+                                {{ apt.status }}
                             </span>
                         </td>
                         <td>
                             {% if apt.status == 'pending' %}
-                            <div style="display: flex; gap: 5px;">
-                                <a href="{{ url_for('edit_appointment', apt_id=apt.id, lang=lang) }}" class="btn btn-primary"
-                                    style="padding: 5px 10px; font-size: 0.8rem; background-color: var(--info-color);">
-                                    <i class="fa-solid fa-pen-to-square"></i> {{ 'Edit' if is_en else '修改' }}
-                                </a>
-                                <a href="{{ url_for('cancel_appointment', apt_id=apt.id, lang=lang) }}" class="btn btn-secondary"
-                                    style="padding: 5px 10px; font-size: 0.8rem; background-color: var(--danger-color);"
-                                    onclick="return confirm('{{ 'Cancel this appointment?\nThis action cannot be undone.' if is_en else '確定要取消此預約嗎？\n此動作無法復原。' }}');">
-                                    <i class="fa-solid fa-ban"></i> {{ 'Cancel' if is_en else '取消' }}
-                                </a>
+                            <div style="display:flex;gap:8px;">
+                                <a href="{{ url_for('edit_appointment', apt_id=apt.id) }}" class="btn btn-primary" style="padding:7px 12px;font-size:0.85rem;background:var(--info-color);">編輯</a>
+                                <a href="{{ url_for('cancel_appointment', apt_id=apt.id) }}" class="btn btn-secondary" style="padding:7px 12px;font-size:0.85rem;background:var(--danger-color);" onclick="return confirm('確定取消這筆預約？');">取消</a>
                             </div>
                             {% else %}
-                            <span style="color: #aaa; font-size: 0.85rem;">-</span>
+                            <span style="color:#98a2b3;">-</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -106,14 +91,12 @@
             </table>
         </div>
         {% else %}
-        <div style="text-align: center; padding: 40px; color: #6c757d;">
-            <i class="fa-regular fa-folder-open" style="font-size: 3rem; margin-bottom: 15px;"></i>
-            <p>{{ 'No appointment records yet' if is_en else '目前沒有預約記錄' }}</p>
-            <a href="{{ url_for('appointment', lang=lang) }}" class="btn btn-primary" style="margin-top: 15px;">{{ 'Book Now' if is_en else '立即預約' }}</a>
+        <div style="text-align:center;padding:50px 20px;color:#6c757d;">
+            <i class="fa-regular fa-folder-open" style="font-size:3rem;margin-bottom:14px;"></i>
+            <p>目前還沒有可管理的預約資料。</p>
+            <a href="{{ url_for('appointment') }}" class="btn btn-primary" style="margin-top:12px;">立即掛號</a>
         </div>
         {% endif %}
     </div>
-
 </body>
-
 </html>
