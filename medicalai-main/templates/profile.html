@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="{{ 'en' if lang == 'en' else 'zh-Hant' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Profile & Family Access' if lang == 'en' else '個人資料與家族連動' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="top-right-nav">
+        <a href="{{ url_for('index', lang=lang) }}" class="nav-btn home-btn"><i class="fa-solid fa-house"></i><span>{{ 'Home' if lang == 'en' else '首頁' }}</span></a>
+        <a href="{{ url_for('appointment', lang=lang) }}" class="nav-btn success"><i class="fa-solid fa-calendar-plus"></i><span>{{ 'New Appointment' if lang == 'en' else '新增預約' }}</span></a>
+        <a href="{{ url_for('appointment_list', lang=lang) }}" class="nav-btn info"><i class="fa-solid fa-calendar-check"></i><span>{{ 'Appointment List' if lang == 'en' else '預約列表' }}</span></a>
+        <a href="{{ url_for('medication_list', lang=lang) }}" class="nav-btn success"><i class="fa-solid fa-pills"></i><span>{{ 'Medication Tracking' if lang == 'en' else '用藥追蹤' }}</span></a>
+        <a href="{{ url_for('logout', lang=lang) }}" class="nav-btn logout-btn">{{ 'Logout' if lang == 'en' else '登出' }}</a>
+    </div>
+
+    <a href="{{ url_for('index', lang=lang) }}" class="logo-container">
+        <i class="fa-solid fa-hospital"></i>
+        <span>Medi Hospital</span>
+    </a>
+
+    <div class="page-container" style="max-width: 1180px;">
+        <h1><i class="fa-solid fa-people-roof"></i> {{ 'Family Access' if lang == 'en' else '家族連動帳號' }}</h1>
+
+        {% if success %}
+        <div style="background:#d4edda;color:#155724;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #c3e6cb;">
+            <i class="fa-solid fa-circle-check"></i> {{ success }}
+        </div>
+        {% endif %}
+        {% if error %}
+        <div style="background:#f8d7da;color:#721c24;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #f5c6cb;">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="form-row" style="align-items: stretch;">
+            <section style="flex:1;background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:24px;">
+                <h2><i class="fa-solid fa-id-card"></i> {{ 'My Account' if lang == 'en' else '我的帳號' }}</h2>
+                <form method="POST" action="{{ url_for('profile', lang=lang) }}">
+                    <input type="hidden" name="lang" value="{{ lang or 'zh' }}">
+                    <div class="form-group">
+                        <label>{{ 'Username' if lang == 'en' else '帳號' }}</label>
+                        <input type="text" value="{{ username }}" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ 'Name' if lang == 'en' else '姓名' }}</label>
+                        <input type="text" name="name" value="{{ user.name or '' }}" placeholder="{{ 'Enter name' if lang == 'en' else '輸入姓名' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>{{ 'Phone' if lang == 'en' else '電話' }}</label>
+                        <input type="tel" name="phone" value="{{ user.phone or '' }}" placeholder="{{ 'Enter phone number' if lang == 'en' else '輸入聯絡電話' }}">
+                    </div>
+                    <div class="form-group">
+                        <label>{{ 'National ID' if lang == 'en' else '身分證號' }}</label>
+                        <input type="text" value="{{ masked_id or ('Not provided' if lang == 'en' else '尚未填寫') }}" readonly>
+                    </div>
+                    <button type="submit" class="btn btn-primary">{{ 'Save Profile' if lang == 'en' else '儲存基本資料' }}</button>
+                </form>
+            </section>
+
+            <section style="flex:1;background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:24px;">
+                <h2><i class="fa-solid fa-link"></i> {{ 'Authorized Families' if lang == 'en' else '已取得授權的家庭' }}</h2>
+                {% if accessible_owners|length > 1 %}
+                    {% for owner in accessible_owners %}
+                        {% if owner != username %}
+                        <div style="padding:12px 14px;border:1px solid #e8edf5;border-radius:12px;margin-bottom:12px;background:#fafcff;">
+                            <strong>{{ owner }}</strong>
+                            <div style="color:#6c757d;font-size:0.95rem;">{{ 'You can create, view, edit, and cancel appointments for this account.' if lang == 'en' else '你可以代為建立、查看、編輯與取消該帳號名下的預約。' }}</div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                <div style="padding:14px;border-radius:12px;background:#f7f9fc;color:#6c757d;">
+                    {{ 'No other family accounts have authorized you yet.' if lang == 'en' else '目前尚未有其他家庭帳號授權你代辦。' }}
+                </div>
+                {% endif %}
+            </section>
+        </div>
+
+        <div class="form-row" style="margin-top: 22px; align-items: stretch;">
+            <section style="flex:1;background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:24px;">
+                <h2><i class="fa-solid fa-child-reaching"></i> {{ 'Care Recipients' if lang == 'en' else '受照護對象' }}</h2>
+                <p style="color:#6c757d;margin-bottom:18px;">{{ 'Add older adults, children, or family members so appointment forms can fill them in quickly.' if lang == 'en' else '新增長者、幼兒或其他家人資料，掛號時可直接帶入。' }}</p>
+                <form method="POST" action="{{ url_for('add_care_profile', lang=lang) }}">
+                    <input type="hidden" name="lang" value="{{ lang or 'zh' }}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>{{ 'Name' if lang == 'en' else '姓名' }}</label>
+                            <input type="text" name="profile_name" placeholder="{{ 'e.g. Alex Wang' if lang == 'en' else '例如 王小明' }}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>{{ 'Relationship' if lang == 'en' else '關係' }}</label>
+                            <input type="text" name="relationship" placeholder="{{ 'e.g. Mother, Son, Grandmother' if lang == 'en' else '例如 母親、兒子、奶奶' }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>{{ 'Phone' if lang == 'en' else '電話' }}</label>
+                            <input type="tel" name="phone" placeholder="{{ 'Optional' if lang == 'en' else '可留空' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>{{ 'National ID' if lang == 'en' else '身分證號' }}</label>
+                            <input type="text" name="identity_id" placeholder="{{ 'Optional' if lang == 'en' else '可留空' }}">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>{{ 'Birth Date' if lang == 'en' else '生日' }}</label>
+                            <input type="date" name="birth_date">
+                        </div>
+                        <div class="form-group">
+                            <label>{{ 'Notes' if lang == 'en' else '備註' }}</label>
+                            <input type="text" name="notes" placeholder="{{ 'e.g. Mobility support needed' if lang == 'en' else '例如 行動不便、需要家屬陪同' }}">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">{{ 'Add Care Recipient' if lang == 'en' else '新增受照護對象' }}</button>
+                </form>
+
+                <div style="margin-top:22px;">
+                    {% if care_profiles %}
+                        {% for person in care_profiles %}
+                        <div style="border:1px solid #e8edf5;border-radius:14px;padding:16px;margin-bottom:12px;background:#fcfdff;">
+                            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                                <div>
+                                    <strong style="font-size:1.05rem;">{{ person.profile_name }}</strong>
+                                    <div style="color:#6c757d;">{{ person.relationship or ('Relationship not provided' if lang == 'en' else '未填關係') }}</div>
+                                    <div style="margin-top:8px;color:#465066;">
+                                        {{ 'Phone' if lang == 'en' else '電話' }}: {{ person.phone or ('Not provided' if lang == 'en' else '未填寫') }}<br>
+                                        {{ 'National ID' if lang == 'en' else '身分證號' }}: {{ person.identity_id or ('Not provided' if lang == 'en' else '未填寫') }}<br>
+                                        {{ 'Birth date' if lang == 'en' else '生日' }}: {{ person.birth_date or ('Not provided' if lang == 'en' else '未填寫') }}<br>
+                                        {{ 'Notes' if lang == 'en' else '備註' }}: {{ person.notes or ('None' if lang == 'en' else '無') }}
+                                    </div>
+                                </div>
+                                <form method="POST" action="{{ url_for('delete_care_profile', profile_id=person.id, lang=lang) }}" onsubmit="return confirm('{{ 'Remove this care recipient?' if lang == 'en' else '確定移除此受照護對象？' }}');">
+                                    <button type="submit" class="btn btn-secondary" style="background:#dc3545;">{{ 'Remove' if lang == 'en' else '移除' }}</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div style="padding:14px;border-radius:12px;background:#f7f9fc;color:#6c757d;">
+                        {{ 'No care recipients added yet.' if lang == 'en' else '尚未建立任何受照護對象。' }}
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section style="flex:1;background:#fff;border:1px solid #e7ebf3;border-radius:16px;padding:24px;">
+                <h2><i class="fa-solid fa-user-group"></i> {{ 'Family Account Authorization' if lang == 'en' else '家族連動帳號授權' }}</h2>
+                <p style="color:#6c757d;margin-bottom:18px;">{{ 'Enter a registered username to let that person help manage appointments for you or your care recipients.' if lang == 'en' else '輸入已註冊帳號，即可授權對方協助你為本人或受照護對象辦理掛號。' }}</p>
+                <form method="POST" action="{{ url_for('add_family_link', lang=lang) }}">
+                    <input type="hidden" name="lang" value="{{ lang or 'zh' }}">
+                    <div class="form-group">
+                        <label>{{ 'Username to authorize' if lang == 'en' else '對方帳號' }}</label>
+                        <input type="text" name="linked_username" placeholder="{{ 'e.g. daughter01' if lang == 'en' else '例如 daughter01' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>{{ 'Note' if lang == 'en' else '備註' }}</label>
+                        <input type="text" name="note" placeholder="{{ 'e.g. Daughter, caregiver, helper' if lang == 'en' else '例如 女兒、外傭、主要照顧者' }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary">{{ 'Authorize This Account' if lang == 'en' else '授權此帳號代辦' }}</button>
+                </form>
+
+                <div style="margin-top:22px;">
+                    {% if linked_accounts %}
+                        {% for link in linked_accounts %}
+                        <div style="border:1px solid #e8edf5;border-radius:14px;padding:16px;margin-bottom:12px;background:#fcfdff;">
+                            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                                <div>
+                                    <strong style="font-size:1.05rem;">{{ link.linked_username }}</strong>
+                                    <div style="color:#6c757d;">{{ link.linked_name or ('Name not provided' if lang == 'en' else '未填姓名') }} / {{ link.linked_phone or ('Phone not provided' if lang == 'en' else '未填電話') }}</div>
+                                    <div style="margin-top:8px;color:#465066;">
+                                        {{ 'Note' if lang == 'en' else '備註' }}: {{ link.note or ('None' if lang == 'en' else '無') }}<br>
+                                        {{ 'Status' if lang == 'en' else '狀態' }}: {{ link.status }}<br>
+                                        {{ 'Created at' if lang == 'en' else '建立時間' }}: {{ link.created_at }}
+                                    </div>
+                                </div>
+                                <form method="POST" action="{{ url_for('delete_family_link', link_id=link.id, lang=lang) }}" onsubmit="return confirm('{{ 'Remove this authorized family account?' if lang == 'en' else '確定解除這個家族連動帳號？' }}');">
+                                    <button type="submit" class="btn btn-secondary" style="background:#dc3545;">{{ 'Remove Access' if lang == 'en' else '解除授權' }}</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div style="padding:14px;border-radius:12px;background:#f7f9fc;color:#6c757d;">
+                        {{ 'No family-linked accounts authorized yet.' if lang == 'en' else '目前尚未授權任何家族連動帳號。' }}
+                    </div>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <a href="{{ url_for('mood', lang=lang or 'zh') }}" class="floating-mood-entry">
+        <i class="fa-solid fa-face-smile"></i>
+        <span>{{ 'Mood Check' if lang == 'en' else '心情評估' }}</span>
+    </a>
+</body>
+</html>

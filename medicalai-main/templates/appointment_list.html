@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="{{ 'en' if lang == 'en' else 'zh-Hant' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Appointment List' if lang == 'en' else '預約列表' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="top-right-nav">
+        <a href="{{ url_for('profile', lang=lang) }}" class="nav-btn user-profile-btn"><i class="fa-solid fa-circle-user"></i><span>{{ username }}</span></a>
+        <a href="{{ url_for('index', lang=lang) }}" class="nav-btn home-btn"><i class="fa-solid fa-house"></i><span>{{ 'Home' if lang == 'en' else '首頁' }}</span></a>
+        <a href="{{ url_for('appointment', lang=lang) }}" class="nav-btn success"><i class="fa-solid fa-calendar-plus"></i><span>{{ 'New Appointment' if lang == 'en' else '新增預約' }}</span></a>
+        <a href="{{ url_for('medication_list', lang=lang) }}" class="nav-btn info"><i class="fa-solid fa-pills"></i><span>{{ 'Medication Tracking' if lang == 'en' else '用藥追蹤' }}</span></a>
+        <a href="{{ url_for('logout', lang=lang) }}" class="nav-btn logout-btn">{{ 'Logout' if lang == 'en' else '登出' }}</a>
+    </div>
+
+    <a href="{{ url_for('index', lang=lang) }}" class="logo-container">
+        <i class="fa-solid fa-hospital"></i>
+        <span>Medi Hospital</span>
+    </a>
+
+    <div class="page-container" style="max-width: 1200px;">
+        <h1><i class="fa-solid fa-list-check"></i> {{ 'Manageable Appointments' if lang == 'en' else '可管理的預約' }}</h1>
+
+        {% if accessible_owners and accessible_owners|length > 1 %}
+        <div style="background:#f7f9fc;border:1px solid #e5ebf5;border-radius:14px;padding:14px 16px;margin-bottom:18px;color:#465066;">
+            <strong>{{ 'Accessible Accounts:' if lang == 'en' else '目前可管理帳號：' }}</strong> {{ accessible_owners|join('、') }}
+        </div>
+        {% endif %}
+
+        {% if success %}
+        <div style="background:#d4edda;color:#155724;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #c3e6cb;">
+            <i class="fa-solid fa-circle-check"></i> {{ success }}
+        </div>
+        {% endif %}
+        {% if error %}
+        <div style="background:#f8d7da;color:#721c24;padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid #f5c6cb;">
+            <i class="fa-solid fa-circle-exclamation"></i> {{ error }}
+        </div>
+        {% endif %}
+
+        {% if appointments %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{{ 'Date' if lang == 'en' else '日期' }}</th>
+                        <th>{{ 'Time' if lang == 'en' else '時間' }}</th>
+                        <th>{{ 'Target' if lang == 'en' else '就診對象' }}</th>
+                        <th>{{ 'Patient' if lang == 'en' else '病患姓名' }}</th>
+                        <th>{{ 'Owner' if lang == 'en' else '帳號歸屬' }}</th>
+                        <th>{{ 'Created By' if lang == 'en' else '建立者' }}</th>
+                        <th>{{ 'Department / Doctor' if lang == 'en' else '科別 / 醫師' }}</th>
+                        <th>{{ 'Status' if lang == 'en' else '狀態' }}</th>
+                        <th>{{ 'Actions' if lang == 'en' else '操作' }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for apt in appointments %}
+                    <tr>
+                        <td>{{ apt.appointment_date }}</td>
+                        <td>{{ apt.appointment_time }}</td>
+                        <td>{{ apt.booking_target }}</td>
+                        <td>
+                            <strong>{{ apt.patient_name }}</strong><br>
+                            <span style="color:#6c757d;font-size:0.9rem;">{{ apt.patient_phone }}</span>
+                        </td>
+                        <td>{{ apt.owner_username }}</td>
+                        <td>{{ apt.created_by_username }}</td>
+                        <td>{{ apt.department }} / {{ apt.doctor_name }}</td>
+                        <td>
+                            <span class="status-badge {% if apt.status == 'pending' %}status-pending{% elif apt.status == 'canceled' %}status-canceled{% else %}status-confirmed{% endif %}">
+                                {% if lang == 'en' %}
+                                    {{ 'Pending' if apt.status == 'pending' else ('Canceled' if apt.status == 'canceled' else 'Confirmed') }}
+                                {% else %}
+                                    {{ apt.status }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if apt.status == 'pending' %}
+                            <div style="display:flex;gap:8px;">
+                                <a href="{{ url_for('edit_appointment', apt_id=apt.id, lang=lang) }}" class="btn btn-primary" style="padding:7px 12px;font-size:0.85rem;background:var(--info-color);">{{ 'Edit' if lang == 'en' else '編輯' }}</a>
+                                <a href="{{ url_for('cancel_appointment', apt_id=apt.id, lang=lang) }}" class="btn btn-secondary" style="padding:7px 12px;font-size:0.85rem;background:var(--danger-color);" onclick="return confirm('{{ 'Cancel this appointment?' if lang == 'en' else '確定取消這筆預約？' }}');">{{ 'Cancel' if lang == 'en' else '取消' }}</a>
+                            </div>
+                            {% else %}
+                            <span style="color:#98a2b3;">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:50px 20px;color:#6c757d;">
+            <i class="fa-regular fa-folder-open" style="font-size:3rem;margin-bottom:14px;"></i>
+            <p>{{ 'No manageable appointment records yet.' if lang == 'en' else '目前還沒有可管理的預約資料。' }}</p>
+            <a href="{{ url_for('appointment', lang=lang) }}" class="btn btn-primary" style="margin-top:12px;">{{ 'Book Now' if lang == 'en' else '立即掛號' }}</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <a href="{{ url_for('mood', lang=lang or 'zh') }}" class="floating-mood-entry">
+        <i class="fa-solid fa-face-smile"></i>
+        <span>{{ 'Mood Check' if lang == 'en' else '心情評估' }}</span>
+    </a>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="{{ 'en' if lang == 'en' else 'zh-Hant' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Mood Assessment' if lang == 'en' else '心情評估' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <div class="top-right-nav">
+        <a href="{{ url_for('profile') }}" class="nav-btn user-profile-btn"><i class="fa-solid fa-circle-user"></i><span>{{ username }}</span></a>
+        <a href="{{ url_for('index', lang=lang) }}" class="nav-btn home-btn"><i class="fa-solid fa-house"></i><span>{{ 'Home' if lang == 'en' else '首頁' }}</span></a>
+        <a href="{{ url_for('appointment', lang=lang) }}" class="nav-btn success"><i class="fa-solid fa-calendar-plus"></i><span>{{ 'New Appointment' if lang == 'en' else '新增預約' }}</span></a>
+        <a href="{{ url_for('medication_list') }}" class="nav-btn info"><i class="fa-solid fa-pills"></i><span>{{ 'Medications' if lang == 'en' else '用藥追蹤' }}</span></a>
+        <a href="{{ url_for('logout') }}" class="nav-btn logout-btn">{{ 'Logout' if lang == 'en' else '登出' }}</a>
+    </div>
+
+    <a href="{{ url_for('index', lang=lang) }}" class="logo-container">
+        <i class="fa-solid fa-hospital"></i>
+        <span>{{ 'Medi Hospital' if lang == 'en' else '醫資醫院' }}</span>
+    </a>
+
+    <div class="page-container mood-page" style="max-width:1180px;">
+        <h1><i class="fa-solid fa-face-smile"></i> {{ 'Mood Assessment Form' if lang == 'en' else '心情評估表單' }}</h1>
+
+        {% if success %}
+        <div class="alert-success"><i class="fa-solid fa-circle-check"></i> {{ success }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="alert-error"><i class="fa-solid fa-circle-exclamation"></i> {{ error }}</div>
+        {% endif %}
+
+        <div class="form-row" style="align-items:flex-start;">
+            <section style="flex:1.15;" class="card-section">
+                <h2><i class="fa-solid fa-clipboard-question"></i> {{ 'Current Mood Questions' if lang == 'en' else '填寫目前狀態' }}</h2>
+                <p class="muted-text">{{ 'Rate how the patient has felt over the past 1 to 2 weeks. This is an initial screening and not a formal medical diagnosis.' if lang == 'en' else '依照最近 1 到 2 週的感受評分，系統會產出目前的情緒狀態判讀。這是初步評估，不等同正式醫療診斷。' }}</p>
+
+                <form method="POST" action="{{ url_for('mood', lang=lang) }}">
+                    <input type="hidden" name="lang" value="{{ lang or 'zh' }}">
+                    <div class="mood-panel">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label><i class="fa-solid fa-people-arrows"></i> {{ 'Assessment Target' if lang == 'en' else '評估對象' }}</label>
+                            <select name="target_profile" required>
+                                {% for person in manageable_people %}
+                                <option value="{{ person.target_value }}" {% if form_data and form_data.target_profile == person.target_value %}selected{% endif %}>
+                                    {{ person.label }} - {{ person.description }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {% for field, label in mood_questions %}
+                    <div class="mood-question-card">
+                        <label>{{ loop.index }}. {{ label }}</label>
+                        <div class="mood-option-grid">
+                            {% for score, option_label in mood_score_options %}
+                            <label class="mood-option">
+                                <input type="radio" name="{{ field }}" value="{{ score }}" {% if form_data and form_data.get(field) == score|string %}checked{% endif %} required>
+                                <span>{{ option_label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <div class="mood-question-card mood-risk-card">
+                        <label><i class="fa-solid fa-triangle-exclamation"></i> {{ 'Risk Alerts' if lang == 'en' else '風險提醒' }}</label>
+                        <p class="muted-text">{{ 'If any question below is answered Yes, the result will be marked for urgent attention.' if lang == 'en' else '若以下任一題為「是」，系統會優先標記為需要立即關懷。' }}</p>
+                        {% for field, label in mood_risk_questions %}
+                        <div class="mood-risk-row">
+                            <label style="display:block;margin-bottom:10px;">{{ label }}</label>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                <label class="mood-option" style="min-width:120px;">
+                                    <input type="radio" name="{{ field }}" value="0" {% if not form_data or form_data.get(field, '0') == '0' %}checked{% endif %}>
+                                    <span>{{ 'No' if lang == 'en' else '否' }}</span>
+                                </label>
+                                <label class="mood-option" style="min-width:120px;">
+                                    <input type="radio" name="{{ field }}" value="1" {% if form_data and form_data.get(field) == '1' %}checked{% endif %}>
+                                    <span>{{ 'Yes' if lang == 'en' else '是' }}</span>
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div style="display:flex;gap:14px;margin-top:22px;">
+                        <button type="submit" class="btn btn-primary">{{ 'Submit Assessment' if lang == 'en' else '送出評估' }}</button>
+                        <a href="{{ url_for('index', lang=lang) }}" class="btn btn-secondary" style="text-decoration:none;">{{ 'Back to Home' if lang == 'en' else '返回首頁' }}</a>
+                    </div>
+                </form>
+            </section>
+
+            <section style="flex:0.85;">
+                <div class="card-section" style="margin-bottom:20px;">
+                    <h2><i class="fa-solid fa-square-poll-vertical"></i> {{ 'Current Result' if lang == 'en' else '目前判讀' }}</h2>
+                    {% if result %}
+                    <div class="mood-result mood-level-{{ result.mood_level }}">
+                        <div class="mood-result-label">{{ result.mood_label }}</div>
+                        <div class="mood-result-score">{{ 'Total Score' if lang == 'en' else '總分' }} {{ result.total_score }} {{ 'pts' if lang == 'en' else '分' }}</div>
+                        <p>{{ result.summary }}</p>
+                        <p style="margin-top:10px;"><strong>{{ 'Recommendation:' if lang == 'en' else '建議：' }}</strong>{{ result.suggestion }}</p>
+                        {% if result.risk_alert %}
+                        <div class="mood-note-box"><strong>{{ 'Risk Alert:' if lang == 'en' else '風險提醒：' }}</strong> {{ result.risk_alert }}</div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="empty-panel">{{ "After submission, the patient's current mood result and recommendation will appear here." if lang == 'en' else '送出表單後，這裡會顯示病患目前的心情狀態與建議。' }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="card-section">
+                    <h2><i class="fa-solid fa-clock-rotate-left"></i> {{ 'Recent Assessments' if lang == 'en' else '近期評估紀錄' }}</h2>
+                    {% if assessments %}
+                        {% for item in assessments %}
+                        <div class="mood-history-card">
+                            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                                <div>
+                                    <strong>{{ item.target_label }}</strong>
+                                    <div class="muted-text" style="font-size:0.95rem;">{{ item.created_at }}</div>
+                                </div>
+                                <span class="status-badge">{{ item.mood_label }}</span>
+                            </div>
+                            <div style="margin-top:10px;color:#465066;">
+                                {{ 'Total Score' if lang == 'en' else '總分' }}：{{ item.total_score }} {{ 'pts' if lang == 'en' else '分' }}<br>
+                                {{ 'Created By' if lang == 'en' else '建立者' }}：{{ item.created_by_username }}
+                            </div>
+                            {% if item.risk_alert %}
+                            <div style="margin-top:8px;color:#b42318;font-weight:600;">{{ 'Risk Alert:' if lang == 'en' else '風險提醒：' }}{{ item.risk_alert }}</div>
+                            {% endif %}
+                            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+                                <a href="{{ url_for('mood', assessment_id=item.id, lang=lang) }}" style="display:inline-block;color:var(--primary-color);text-decoration:none;font-weight:600;">{{ 'View Result' if lang == 'en' else '查看這次判讀' }}</a>
+                                <form method="POST" action="{{ url_for('delete_mood_assessment', assessment_id=item.id, lang=lang) }}" onsubmit="return confirm('{{ 'Delete this mood assessment?' if lang == 'en' else '確定刪除這筆心情評估紀錄？' }}');" style="margin:0;">
+                                    <button type="submit" class="btn btn-secondary mood-delete-btn">{{ 'Delete' if lang == 'en' else '刪除' }}</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div class="empty-panel">{{ 'No mood assessments yet.' if lang == 'en' else '目前還沒有心情評估紀錄。' }}</div>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

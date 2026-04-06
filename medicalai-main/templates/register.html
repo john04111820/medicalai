@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="{{ 'en' if lang == 'en' else 'zh-Hant' }}">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ 'Register - Medi Hospital' if lang == 'en' else '註冊 - 醫資醫院' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #eef1f7 0%, #e1e7f0 100%);
+        }
+
+        .main-container {
+            margin: 0;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            max-width: none;
+        }
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .login-logo {
+            font-size: 3rem;
+            color: var(--secondary-color);
+            margin-bottom: 20px;
+        }
+
+        .login-title {
+            font-size: 1.5rem;
+            color: var(--dark-text);
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+
+<body>
+
+    <main class="main-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <i class="fa-solid fa-user-plus"></i>
+            </div>
+            <h2 class="login-title">{{ 'Create Account' if lang == 'en' else '建立新帳號' }}</h2>
+            <p style="color: var(--light-text); margin-bottom: 30px;">{{ 'Fill in the information below to complete registration' if lang == 'en' else '請填寫下方資訊以完成註冊' }}</p>
+
+            <form method="POST" action="{{ url_for('register', lang=lang) }}">
+                <input type="hidden" name="lang" value="{{ lang or 'zh' }}">
+                <div class="form-group" style="text-align: left;">
+                    <label>{{ 'Username' if lang == 'en' else '設定帳號' }} <span style="color:red">*</span></label>
+                    <input type="text" name="username" placeholder="{{ 'Enter username' if lang == 'en' else '請輸入帳號' }}" required>
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label>{{ 'Password' if lang == 'en' else '設定密碼' }} <span style="color:red">*</span></label>
+                    <input type="password" name="password" placeholder="{{ 'Enter password' if lang == 'en' else '請輸入密碼' }}" required>
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label>{{ 'Name' if lang == 'en' else '姓名' }} <span style="color:red">*</span></label>
+                    <input type="text" name="name" placeholder="{{ 'Enter name' if lang == 'en' else '請輸入姓名' }}" required>
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label>{{ 'Phone' if lang == 'en' else '聯絡電話' }} <span style="color:red">*</span></label>
+                    <input type="tel" name="phone" placeholder="{{ 'Enter phone number' if lang == 'en' else '請輸入聯絡電話' }}" required>
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label>{{ 'National ID' if lang == 'en' else '身分證字號' }} <span style="color:red">*</span></label>
+                    <input type="text" name="identity_id" placeholder="{{ 'Enter national ID' if lang == 'en' else '請輸入身分證字號' }}" required>
+                </div>
+
+                {% if message %}
+                <div
+                    style="font-size: 0.9rem; margin-bottom: 15px; padding: 10px; border-radius: 8px;
+                    {% if '成功' in message %}background: #d4edda; color: #155724;{% else %}background: #fff5f5; color: var(--danger-color);{% endif %}">
+                    {% if '成功' in message or 'successful' in message %}
+                    <i class="fa-solid fa-circle-check"></i>
+                    {% else %}
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    {% endif %}
+                    {{ message }}
+                </div>
+                {% endif %}
+
+                <button type="submit" class="btn w-100"
+                    style="background: var(--secondary-color); color: white; width: 100%; margin-bottom: 15px; font-size: 1.1rem; padding: 14px;">
+                    {{ 'Register Now' if lang == 'en' else '立即註冊' }}
+                </button>
+            </form>
+
+            <div style="margin-top: 20px; font-size: 0.95rem;">
+                <a href="{{ url_for('login', lang=lang) }}"
+                    style="color: var(--primary-color); text-decoration: none; font-weight: 600;">{{ 'Already have an account? Back to login' if lang == 'en' else '已經有帳號？返回登入' }}</a>
+            </div>
+        </div>
+    </main>
+
+</body>
+
+</html>
